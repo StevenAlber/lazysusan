@@ -21,6 +21,18 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const FONT_REGULAR = path.join(__dirname, 'fonts', 'DejaVuSans.ttf');
 const FONT_BOLD = path.join(__dirname, 'fonts', 'DejaVuSans-Bold.ttf');
 
+// Intel Feed Cache
+let intelCache = {
+  en: { items: [], lastUpdate: null },
+  ru: { items: [], lastUpdate: null }
+};
+const CACHE_DURATION = 15 * 60 * 1000;
+
+const INTEL_TOPICS = {
+  en: ['Arctic development', 'Biotech regulations', 'EU AI governance', 'Global strategic shifts'],
+  ru: ['Арктика геополитика', 'Биотехнологии РФ', 'Технологическая политика', 'Экономическая стратегия']
+};
+
 const AGENTS = [
   {
     id: 'architect',
@@ -71,6 +83,56 @@ const LANG_INSTRUCTIONS = {
   ru: 'Отвечай только на русском языке. Будь точным, профессиональным и содержательным.',
   et: 'Vasta ainult eesti keeles. Ole täpne, professionaalne ja sisukas.'
 };
+
+// Intel Feed Functions
+async function fetchIntelFeed(lang) {
+  const topics = INTEL_TOPICS[lang] || INTEL_TOPICS.en;
+  const prompt = lang === 'ru' 
+    ? `Найди 5 важных новостей за 48 часов по темам: ${topics.join(', ')}. Формат JSON: [{"title":"...","summary":"...","category":"ARCTIC|BIOTECH|TECH|STRATEGY","importance":"HIGH|MEDIUM|LOW","time":"X hours ago"}]`
+    : `Find 5 important news from last 48 hours on: ${topics.join(', ')}. Format JSON: [{"title":"...","summary":"...","category":"ARCTIC|BIOTECH|TECH|STRATEGY","importance":"HIGH|MEDIUM|LOW","time":"X hours ago"}]`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://lazysusan.fly.dev',
+        'X-Title': 'Lazy Susan Intel'
+      },
+      body: JSON.stringify({
+        model: 'perplexity/sonar-pro',
+        messages: [{ role: 'user', content: prompt }],
+        max_tokens: 1500,
+        temperature: 0.3
+      })
+    });
+    const data = await response.json();
+    if (data.error) return [];
+    const content = data.choices[0].message.content;
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      return JSON.parse(jsonMatch[0]);
+    }
+    return [];
+  } catch (error) {
+    console.error('Intel feed error:', error);
+    return [];
+  }
+}
+
+async function getIntelFeed(lang) {
+  const feedLang = (lang === 'ru') ? 'ru' : 'en';
+  const cache = intelCache[feedLang];
+  if (cache.lastUpdate && (Date.now() - cache.lastUpdate < CACHE_DURATION) && cache.items.length > 0) {
+    return { items: cache.items, lastUpdate: cache.lastUpdate, cached: true };
+  }
+  const items = await fetchIntelFeed(feedLang);
+  if (items.length > 0) {
+    intelCache[feedLang] = { items, lastUpdate: Date.now() };
+  }
+  return { items: items.length > 0 ? items : cache.items, lastUpdate: Date.now(), cached: false };
+}
 
 async function extractText(file) {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -228,6 +290,7 @@ Rules:
   }
 }
 
+// API Endpoints
 app.post('/api/ask', async (req, res) => {
   const { question, lang, fileContent, briefMode } = req.body;
   const useLang = lang || 'en';
@@ -271,6 +334,17 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
       text: text.substring(0, 20000),
       length: text.length
     });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Intel Feed Endpoint
+app.get('/api/intel', async (req, res) => {
+  const lang = req.query.lang || 'en';
+  try {
+    const feed = await getIntelFeed(lang);
+    res.json(feed);
   } catch (error) {
     res.status(500).json({ error: error.message });
   }
@@ -392,7 +466,6 @@ app.post('/api/export-pdf', async (req, res) => {
       doc.font('MainFont');
     }
     
-    // For briefs, use larger text and better formatting
     const fontSize = briefMode ? 11 : 10;
     const lineGap = briefMode ? 3 : 2;
     
@@ -402,7 +475,7 @@ app.post('/api/export-pdf', async (req, res) => {
     });
     doc.moveDown(1);
 
-    // Agents (skip for brief mode or put on separate page)
+    // Agents (skip for brief mode)
     if (!briefMode) {
       doc.addPage();
       
