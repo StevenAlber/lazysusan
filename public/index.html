@@ -84,6 +84,20 @@
       ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано'},
       et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud'}
     };
+    const MODEL_NAMES={
+      'anthropic/claude-opus-4':'KRYONIS-Α',
+      'openai/gpt-4o':'KRYONIS-Β',
+      'perplexity/sonar-pro':'KRYONIS-Δ'
+    };
+    const AGENT_MODELS={
+      'Architect':'KRYONIS-Α',
+      'Red Team':'KRYONIS-Β',
+      'Synthesizer':'KRYONIS-Γ',
+      'Facts':'KRYONIS-Δ',
+      'Style':'KRYONIS-Ε',
+      'Futurist':'KRYONIS-Ζ',
+      'Devil\'s Advocate':'KRYONIS-Η'
+    };
     function updateUI(){
       const t=UI[currentLang];
       document.getElementById('question').placeholder=t.placeholder;
@@ -110,6 +124,9 @@
         .replace(/\*(.+?)\*/g,'<em>$1</em>')
         .replace(/\n/g,'<br>');
     }
+    function getModelDisplay(agentName){
+      return AGENT_MODELS[agentName]||'KRYONIS';
+    }
     async function ask(){
       const question=document.getElementById('question').value.trim();
       if(!question)return;
@@ -132,7 +149,7 @@
           <div class="agent">
             <div class="agent-header">
               <span class="agent-name">${a.agent}</span>
-              <span class="agent-model">${a.model||''}</span>
+              <span class="agent-model">${getModelDisplay(a.agent)}</span>
             </div>
             <div class="agent-role">${a.role||''}</div>
             <div class="agent-response ${a.error?'agent-error':''}">${a.error?'❌ '+a.error:renderMarkdown(a.response)}</div>
