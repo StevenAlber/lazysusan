@@ -11,61 +11,63 @@ const AGENTS = [
   {
     id: 'architect',
     name: 'Architect',
-    role: { en: 'Structures the problem, sees the system', ru: 'Структурирует проблему, видит систему', et: 'Struktureerib probleemi, näeb süsteemi' },
-    model: 'anthropic/claude-sonnet-4'
+    role: { en: 'Structures the problem, sees the system, identifies key leverage points', ru: 'Структурирует проблему, видит систему, определяет ключевые точки воздействия', et: 'Struktureerib probleemi, näeb süsteemi, tuvastab võtmekohad' },
+    model: 'anthropic/claude-opus-4'
   },
   {
     id: 'redteam',
     name: 'Red Team',
-    role: { en: 'Finds weaknesses, criticizes, finds holes', ru: 'Ищет слабости, критикует, находит дыры', et: 'Otsib nõrkusi, kritiseerib, leiab augud' },
+    role: { en: 'Finds weaknesses, attacks assumptions, stress-tests logic', ru: 'Ищет слабости, атакует допущения, проверяет логику на прочность', et: 'Otsib nõrkusi, ründab eeldusi, testib loogikat' },
     model: 'openai/gpt-4o'
   },
   {
     id: 'synth',
     name: 'Synthesizer',
-    role: { en: 'Connects different views, finds patterns', ru: 'Соединяет разные взгляды, находит паттерны', et: 'Ühendab erinevad vaated, leiab mustrid' },
-    model: 'google/gemini-2.5-pro-preview'
+    role: { en: 'Connects different views, finds deep patterns, builds bridges', ru: 'Соединяет разные взгляды, находит глубинные паттерны, строит мосты', et: 'Ühendab erinevad vaated, leiab sügavad mustrid, ehitab sildu' },
+    model: 'anthropic/claude-opus-4'
   },
   {
     id: 'facts',
     name: 'Facts',
-    role: { en: 'Checks facts, searches sources', ru: 'Проверяет факты, ищет источники', et: 'Kontrollib fakte, otsib allikaid' },
+    role: { en: 'Checks facts in real-time, searches latest sources, verifies claims', ru: 'Проверяет факты в реальном времени, ищет последние источники, верифицирует утверждения', et: 'Kontrollib fakte reaalajas, otsib värskeid allikaid, verifitseerib väiteid' },
     model: 'perplexity/sonar-pro'
   },
   {
     id: 'style',
     name: 'Style',
-    role: { en: 'Polishes language, makes readable', ru: 'Шлифует язык, делает читаемым', et: 'Viimistleb keele, teeb loetavaks' },
-    model: 'anthropic/claude-sonnet-4'
+    role: { en: 'Polishes language, ensures clarity, makes compelling', ru: 'Шлифует язык, обеспечивает ясность, делает убедительным', et: 'Viimistleb keele, tagab selguse, teeb veenvaks' },
+    model: 'anthropic/claude-opus-4'
   },
   {
     id: 'futurist',
     name: 'Futurist',
-    role: { en: 'Long-term view, trends, 10-100 year horizon', ru: 'Долгосрочный взгляд, тренды, горизонт 10-100 лет', et: 'Pikaajaline vaade, trendid, 10-100 aasta horisont' },
-    model: 'anthropic/claude-sonnet-4'
+    role: { en: 'Long-term trends, 10-100 year horizon, civilizational perspective', ru: 'Долгосрочные тренды, горизонт 10-100 лет, цивилизационная перспектива', et: 'Pikaajalised trendid, 10-100 aasta horisont, tsivilisatsiooniline perspektiiv' },
+    model: 'anthropic/claude-opus-4'
   },
   {
     id: 'devil',
     name: 'Devil\'s Advocate',
-    role: { en: 'Argues the opposite position, challenges assumptions', ru: 'Аргументирует противоположную позицию, оспаривает допущения', et: 'Argumenteerib vastupidist seisukohta, vaidlustab eeldusi' },
+    role: { en: 'Argues opposite position, challenges consensus, tests robustness', ru: 'Аргументирует противоположную позицию, оспаривает консенсус, проверяет устойчивость', et: 'Argumenteerib vastupidist, vaidlustab konsensust, testib vastupidavust' },
     model: 'openai/gpt-4o'
   }
 ];
 
 const LANG_INSTRUCTIONS = {
-  en: 'Respond in English only.',
-  ru: 'Отвечай только на русском языке.',
-  et: 'Vasta ainult eesti keeles.'
+  en: 'Respond in English only. Be precise, professional, and substantive.',
+  ru: 'Отвечай только на русском языке. Будь точным, профессиональным и содержательным.',
+  et: 'Vasta ainult eesti keeles. Ole täpne, professionaalne ja sisukas.'
 };
 
 async function askAgent(agent, question, lang, context) {
   const role = agent.role[lang] || agent.role.en;
   const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
 
-  const systemPrompt = `You are ${agent.name}. Your role: ${role}.
+  const systemPrompt = `You are ${agent.name} - an elite expert in your domain.
+Your role: ${role}.
 ${langInstruction}
-Respond briefly and concretely (max 200 words).
-Focus only on your role.`;
+Respond with substance and depth (max 250 words).
+Focus only on your specific role - provide unique value that other agents cannot.
+No fluff, no generic statements. Every sentence must add insight.`;
 
   const userPrompt = context
     ? `Question: ${question}\n\nOther agents' responses:\n${context}`
@@ -86,7 +88,7 @@ Focus only on your role.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 500,
+        max_tokens: 600,
         temperature: 0.7
       })
     });
@@ -116,19 +118,21 @@ async function synthesize(question, agentResponses, lang) {
 
   const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
 
-  const systemPrompt = `You are the Conductor - the leader of the Lazy Susan orchestra.
-Your task: synthesize agents' responses into one clear, actionable answer.
+  const systemPrompt = `You are the Conductor - the master synthesizer leading an elite team of AI agents.
+Your task: create a definitive, actionable synthesis from 7 expert perspectives.
 
 ${langInstruction}
 
 Rules:
-1. Don't repeat agents' words - create a new whole
-2. Mark if agents disagree (DISSENT)
-3. Highlight consensus and main conclusions
-4. Include the Futurist's long-term perspective
-5. Note the Devil's Advocate's challenges
-6. Keep response compact (max 400 words)
-7. Add "Confidence: X/10" rating at the end`;
+1. Synthesize - don't summarize. Create new insight from the combination.
+2. Mark DISSENT clearly when agents fundamentally disagree
+3. Highlight CONSENSUS on key points
+4. Include the Futurist's long-term implications
+5. Address the Devil's Advocate's strongest challenges
+6. Be decisive - give clear conclusions, not hedged opinions
+7. Maximum 500 words - every word must earn its place
+8. End with "Confidence: X/10" and brief justification
+9. If relevant, suggest ONE concrete next action`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -140,12 +144,12 @@ Rules:
         'X-Title': 'Lazy Susan Orchestrator'
       },
       body: JSON.stringify({
-        model: 'anthropic/claude-sonnet-4',
+        model: 'anthropic/claude-opus-4',
         messages: [
           { role: 'system', content: systemPrompt },
           { role: 'user', content: `Question: ${question}\n\nAgents' responses:\n\n${context}` }
         ],
-        max_tokens: 1000,
+        max_tokens: 1200,
         temperature: 0.5
       })
     });
@@ -188,5 +192,5 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`Lazy Susan running on port ${PORT}`);
+  console.log(`Lazy Susan PRO running on port ${PORT}`);
 });
