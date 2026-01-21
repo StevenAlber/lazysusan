@@ -339,11 +339,35 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
   }
 });
 
-// Intel Feed Endpoint
+// Intel Feed Endpoints
 app.get('/api/intel', async (req, res) => {
   const lang = req.query.lang || 'en';
   try {
     const feed = await getIntelFeed(lang);
+    res.json(feed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Alias for frontend compatibility
+app.get('/api/intel-feed', async (req, res) => {
+  const lang = req.query.lang || 'en';
+  try {
+    const feed = await getIntelFeed(lang);
+    res.json(feed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/intel-feed/refresh', async (req, res) => {
+  const { lang } = req.body;
+  const feedLang = (lang === 'ru') ? 'ru' : 'en';
+  // Clear cache to force refresh
+  intelCache[feedLang] = { items: [], lastUpdate: null };
+  try {
+    const feed = await getIntelFeed(feedLang);
     res.json(feed);
   } catch (error) {
     res.status(500).json({ error: error.message });
