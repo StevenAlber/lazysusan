@@ -17,7 +17,7 @@ const upload = multer({
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Font paths - using uploaded fonts
+// Font paths
 const FONT_REGULAR = path.join(__dirname, 'fonts', 'DejaVuSans.ttf');
 const FONT_BOLD = path.join(__dirname, 'fonts', 'DejaVuSans-Bold.ttf');
 
@@ -88,14 +88,16 @@ async function extractText(file) {
   throw new Error('Unsupported file type');
 }
 
-async function askAgent(agent, question, lang, context) {
+async function askAgent(agent, question, lang, context, briefMode = false) {
   const role = agent.role[lang] || agent.role.en;
   const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
+  
+  const maxWords = briefMode ? 400 : 250;
 
   const systemPrompt = `You are ${agent.name} - an elite expert in your domain.
 Your role: ${role}.
 ${langInstruction}
-Respond with substance and depth (max 250 words).
+Respond with substance and depth (max ${maxWords} words).
 Focus only on your specific role - provide unique value that other agents cannot.
 No fluff, no generic statements. Every sentence must add insight.`;
 
@@ -118,7 +120,7 @@ No fluff, no generic statements. Every sentence must add insight.`;
           { role: 'system', content: systemPrompt },
           { role: 'user', content: userPrompt }
         ],
-        max_tokens: 600,
+        max_tokens: briefMode ? 800 : 600,
         temperature: 0.7
       })
     });
@@ -140,7 +142,7 @@ No fluff, no generic statements. Every sentence must add insight.`;
   }
 }
 
-async function synthesize(question, agentResponses, lang) {
+async function synthesize(question, agentResponses, lang, briefMode = false) {
   const context = agentResponses
     .filter(r => !r.error)
     .map(r => `**${r.agent}** (${r.role}):\n${r.response}`)
@@ -148,7 +150,40 @@ async function synthesize(question, agentResponses, lang) {
 
   const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
 
-  const systemPrompt = `You are the Conductor - the master synthesizer leading an elite team of AI agents.
+  const briefPrompt = `You are the Conductor - a master strategic analyst synthesizing insights from 7 expert perspectives.
+Your task: Write a comprehensive Strategic Brief (4-5 pages, approximately 1500-2000 words).
+
+${langInstruction}
+
+Strategic Brief Structure:
+1. EXECUTIVE SUMMARY (150-200 words): Key findings and recommendations at a glance
+2. SITUATION ANALYSIS (300-400 words): 
+   - Current state and context
+   - Key stakeholders and dynamics
+   - Critical factors identified by experts
+3. STRATEGIC ASSESSMENT (400-500 words):
+   - CONSENSUS: Where experts agree
+   - DISSENT: Where experts disagree and why it matters
+   - Risk factors and opportunities
+4. LONG-TERM IMPLICATIONS (300-400 words):
+   - 10-50 year horizon considerations
+   - Civilizational perspective
+   - Emerging trends and disruptions
+5. RECOMMENDATIONS (200-300 words):
+   - Priority actions (immediate, medium-term, long-term)
+   - Resource requirements
+   - Success metrics
+6. CONCLUSION (100-150 words): Strategic synthesis and final assessment
+
+Rules:
+- Write in professional, authoritative prose
+- Use clear section headings
+- Be analytical and substantive
+- Include specific examples and evidence
+- Maintain strategic focus throughout
+- End with Confidence rating (X/10) and brief justification`;
+
+  const synthesisPrompt = `You are the Conductor - the master synthesizer leading an elite team of AI agents.
 Your task: create a definitive, actionable synthesis from 7 expert perspectives.
 
 ${langInstruction}
@@ -164,6 +199,8 @@ Rules:
 8. End with "Confidence: X/10" and brief justification
 9. If relevant, suggest ONE concrete next action`;
 
+  const systemPrompt = briefMode ? briefPrompt : synthesisPrompt;
+
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
       method: 'POST',
@@ -177,10 +214,10 @@ Rules:
         model: 'anthropic/claude-opus-4',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Question: ${question}\n\nAgents' responses:\n\n${context}` }
+          { role: 'user', content: `Topic/Question: ${question}\n\nExpert perspectives to synthesize:\n\n${context}` }
         ],
-        max_tokens: 1200,
-        temperature: 0.5
+        max_tokens: briefMode ? 4000 : 1200,
+        temperature: briefMode ? 0.6 : 0.5
       })
     });
 
@@ -192,8 +229,9 @@ Rules:
 }
 
 app.post('/api/ask', async (req, res) => {
-  const { question, lang, fileContent } = req.body;
+  const { question, lang, fileContent, briefMode } = req.body;
   const useLang = lang || 'en';
+  const isBrief = briefMode || false;
 
   if (!question) {
     return res.status(400).json({ error: 'Question missing' });
@@ -207,13 +245,14 @@ app.post('/api/ask', async (req, res) => {
     ? `${question}\n\n---\nDOCUMENT CONTENT:\n${fileContent.substring(0, 15000)}`
     : question;
 
-  const agentPromises = AGENTS.map(agent => askAgent(agent, fullQuestion, useLang, ''));
+  const agentPromises = AGENTS.map(agent => askAgent(agent, fullQuestion, useLang, '', isBrief));
   const agentResponses = await Promise.all(agentPromises);
-  const synthesis = await synthesize(fullQuestion, agentResponses, useLang);
+  const synthesis = await synthesize(fullQuestion, agentResponses, useLang, isBrief);
 
   res.json({
     question,
     lang: useLang,
+    briefMode: isBrief,
     timestamp: new Date().toISOString(),
     agents: agentResponses,
     synthesis
@@ -238,7 +277,7 @@ app.post('/api/upload', upload.single('file'), async (req, res) => {
 });
 
 app.post('/api/export-pdf', async (req, res) => {
-  const { question, synthesis, agents, timestamp, lang } = req.body;
+  const { question, synthesis, agents, timestamp, lang, briefMode } = req.body;
   
   try {
     const doc = new PDFDocument({ 
@@ -252,16 +291,14 @@ app.post('/api/export-pdf', async (req, res) => {
     doc.on('end', () => {
       const pdfBuffer = Buffer.concat(chunks);
       res.setHeader('Content-Type', 'application/pdf');
-      res.setHeader('Content-Disposition', `attachment; filename="KRYONIS_Analysis_${Date.now()}.pdf"`);
+      const filename = briefMode ? 'KRYONIS_Strategic_Brief' : 'KRYONIS_Analysis';
+      res.setHeader('Content-Disposition', `attachment; filename="${filename}_${Date.now()}.pdf"`);
       res.send(pdfBuffer);
     });
 
     // Register custom fonts
     const fontExists = fs.existsSync(FONT_REGULAR);
     const fontBoldExists = fs.existsSync(FONT_BOLD);
-    
-    console.log('Font regular exists:', fontExists, FONT_REGULAR);
-    console.log('Font bold exists:', fontBoldExists, FONT_BOLD);
     
     if (fontExists) {
       doc.registerFont('MainFont', FONT_REGULAR);
@@ -284,9 +321,27 @@ app.post('/api/export-pdf', async (req, res) => {
     };
 
     const langTitles = {
-      en: { report: 'KRYONIS Analysis Report', question: 'QUESTION', synthesis: 'CONDUCTOR\'S SYNTHESIS', agents: 'AGENT RESPONSES', generated: 'Generated by KRYONIS Lazy Susan PRO' },
-      ru: { report: 'Аналитический отчёт KRYONIS', question: 'ВОПРОС', synthesis: 'СИНТЕЗ ДИРИЖЁРА', agents: 'ОТВЕТЫ АГЕНТОВ', generated: 'Сгенерировано KRYONIS Lazy Susan PRO' },
-      et: { report: 'KRYONIS Analüüsiraport', question: 'KÜSIMUS', synthesis: 'DIRIGENDI SÜNTEES', agents: 'AGENTIDE VASTUSED', generated: 'Genereeritud KRYONIS Lazy Susan PRO' }
+      en: { 
+        report: briefMode ? 'KRYONIS Strategic Brief' : 'KRYONIS Analysis Report', 
+        question: briefMode ? 'TOPIC' : 'QUESTION', 
+        synthesis: briefMode ? 'STRATEGIC BRIEF' : 'CONDUCTOR\'S SYNTHESIS', 
+        agents: 'AGENT RESPONSES', 
+        generated: 'Generated by KRYONIS Lazy Susan PRO' 
+      },
+      ru: { 
+        report: briefMode ? 'Стратегический обзор KRYONIS' : 'Аналитический отчёт KRYONIS', 
+        question: briefMode ? 'ТЕМА' : 'ВОПРОС', 
+        synthesis: briefMode ? 'СТРАТЕГИЧЕСКИЙ ОБЗОР' : 'СИНТЕЗ ДИРИЖЁРА', 
+        agents: 'ОТВЕТЫ АГЕНТОВ', 
+        generated: 'Сгенерировано KRYONIS Lazy Susan PRO' 
+      },
+      et: { 
+        report: briefMode ? 'KRYONIS Strateegiline ülevaade' : 'KRYONIS Analüüsiraport', 
+        question: briefMode ? 'TEEMA' : 'KÜSIMUS', 
+        synthesis: briefMode ? 'STRATEEGILINE ÜLEVAADE' : 'DIRIGENDI SÜNTEES', 
+        agents: 'AGENTIDE VASTUSED', 
+        generated: 'Genereeritud KRYONIS Lazy Susan PRO' 
+      }
     };
 
     const titles = langTitles[lang] || langTitles.en;
@@ -314,7 +369,7 @@ app.post('/api/export-pdf', async (req, res) => {
     doc.fontSize(10).fillColor('#666').text(new Date(timestamp).toLocaleString(), { align: 'center' });
     doc.moveDown(1);
 
-    // Question
+    // Question/Topic
     if (fontBoldExists && fontExists) {
       doc.font('MainFontBold');
     }
@@ -326,7 +381,7 @@ app.post('/api/export-pdf', async (req, res) => {
     doc.fontSize(11).fillColor('#333').text(cleanText(question).substring(0, 500));
     doc.moveDown(1);
 
-    // Synthesis
+    // Synthesis/Brief
     if (fontBoldExists && fontExists) {
       doc.font('MainFontBold');
     }
@@ -336,43 +391,50 @@ app.post('/api/export-pdf', async (req, res) => {
     if (fontExists) {
       doc.font('MainFont');
     }
-    doc.fontSize(10).fillColor('#333').text(cleanText(synthesis), {
+    
+    // For briefs, use larger text and better formatting
+    const fontSize = briefMode ? 11 : 10;
+    const lineGap = briefMode ? 3 : 2;
+    
+    doc.fontSize(fontSize).fillColor('#333').text(cleanText(synthesis), {
       align: 'justify',
-      lineGap: 2
+      lineGap: lineGap
     });
     doc.moveDown(1);
 
-    // Agents
-    doc.addPage();
-    
-    if (fontBoldExists && fontExists) {
-      doc.font('MainFontBold');
-    }
-    doc.fontSize(14).fillColor('#1B4D3E').text(titles.agents, { underline: true });
-    doc.moveDown(0.5);
-
-    for (const agent of agents) {
-      if (agent.error) continue;
-      
-      const code = agentCodes[agent.agent] || agent.agent;
+    // Agents (skip for brief mode or put on separate page)
+    if (!briefMode) {
+      doc.addPage();
       
       if (fontBoldExists && fontExists) {
         doc.font('MainFontBold');
       }
-      doc.fontSize(11).fillColor('#1B4D3E').text(`${agent.agent} (${code})`);
-      
-      if (fontExists) {
-        doc.font('MainFont');
-      }
-      doc.fontSize(9).fillColor('#8B6914').text(cleanText(agent.role || ''));
-      doc.fontSize(9).fillColor('#333').text(cleanText(agent.response).substring(0, 1200), {
-        align: 'justify',
-        lineGap: 1
-      });
-      doc.moveDown(0.8);
-      
-      if (doc.y > 700) {
-        doc.addPage();
+      doc.fontSize(14).fillColor('#1B4D3E').text(titles.agents, { underline: true });
+      doc.moveDown(0.5);
+
+      for (const agent of agents) {
+        if (agent.error) continue;
+        
+        const code = agentCodes[agent.agent] || agent.agent;
+        
+        if (fontBoldExists && fontExists) {
+          doc.font('MainFontBold');
+        }
+        doc.fontSize(11).fillColor('#1B4D3E').text(`${agent.agent} (${code})`);
+        
+        if (fontExists) {
+          doc.font('MainFont');
+        }
+        doc.fontSize(9).fillColor('#8B6914').text(cleanText(agent.role || ''));
+        doc.fontSize(9).fillColor('#333').text(cleanText(agent.response).substring(0, 1200), {
+          align: 'justify',
+          lineGap: 1
+        });
+        doc.moveDown(0.8);
+        
+        if (doc.y > 700) {
+          doc.addPage();
+        }
       }
     }
 
