@@ -21,6 +21,13 @@ const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 const FONT_REGULAR = path.join(__dirname, 'fonts', 'DejaVuSans.ttf');
 const FONT_BOLD = path.join(__dirname, 'fonts', 'DejaVuSans-Bold.ttf');
 
+// Intel Feed Cache
+let intelCache = {
+  en: { items: [], lastUpdate: null },
+  ru: { items: [], lastUpdate: null }
+};
+const CACHE_DURATION = 15 * 60 * 1000; // 15 minutes
+
 const AGENTS = [
   {
     id: 'architect',
@@ -71,6 +78,127 @@ const LANG_INSTRUCTIONS = {
   ru: 'Отвечай только на русском языке. Будь точным, профессиональным и содержательным.',
   et: 'Vasta ainult eesti keeles. Ole täpne, professionaalne ja sisukas.'
 };
+
+// Intel Feed Topics
+const INTEL_TOPICS = {
+  en: [
+    'Arctic development policy and geopolitics',
+    'Biotech and bioeconomy regulations',
+    'EU technology and AI governance',
+    'Global strategic shifts and emerging powers'
+  ],
+  ru: [
+    'Арктика: развитие и геополитика России',
+    'Биотехнологии и биоэкономика РФ',
+    'Технологическая политика и ИИ',
+    'Экономические санкции и стратегия'
+  ]
+};
+
+async function fetchIntelFeed(lang) {
+  const topics = INTEL_TOPICS[lang] || INTEL_TOPICS.en;
+  const query = topics.join('; ');
+  
+  const systemPrompt = lang === 'ru' 
+    ? `Ты — аналитик стратегической разведки. Найди 5-7 самых важных новостей за последние 48 часов по темам: ${query}. 
+       
+       Для каждой новости дай:
+       - Краткий заголовок (до 10 слов)
+       - Одно предложение с сутью
+       - Категорию: ARCTIC, BIOTECH, TECH, STRATEGY
+       - Уровень важности: HIGH, MEDIUM, LOW
+       
+       Формат JSON массив:
+       [{"title":"...","summary":"...","category":"...","importance":"...","time":"X hours ago"}]
+       
+       Только JSON, без пояснений.`
+    : `You are a strategic intelligence analyst. Find 5-7 most important developments from the last 48 hours on: ${query}.
+       
+       For each item provide:
+       - Brief headline (max 10 words)
+       - One sentence summary
+       - Category: ARCTIC, BIOTECH, TECH, STRATEGY
+       - Importance level: HIGH, MEDIUM, LOW
+       
+       Format as JSON array:
+       [{"title":"...","summary":"...","category":"...","importance":"...","time":"X hours ago"}]
+       
+       Only JSON, no explanations.`;
+
+  try {
+    const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
+      method: 'POST',
+      headers: {
+        'Authorization': `Bearer ${OPENROUTER_API_KEY}`,
+        'Content-Type': 'application/json',
+        'HTTP-Referer': 'https://lazysusan.fly.dev',
+        'X-Title': 'Lazy Susan Intel Feed'
+      },
+      body: JSON.stringify({
+        model: 'perplexity/sonar-pro',
+        messages: [
+          { role: 'user', content: systemPrompt }
+        ],
+        max_tokens: 1500,
+        temperature: 0.3
+      })
+    });
+
+    const data = await response.json();
+    
+    if (data.error) {
+      console.error('Intel feed error:', data.error);
+      return [];
+    }
+
+    const content = data.choices[0].message.content;
+    
+    // Parse JSON from response
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (jsonMatch) {
+      const items = JSON.parse(jsonMatch[0]);
+      return items.map(item => ({
+        ...item,
+        timestamp: new Date().toISOString()
+      }));
+    }
+    
+    return [];
+  } catch (error) {
+    console.error('Intel feed fetch error:', error);
+    return [];
+  }
+}
+
+async function getIntelFeed(lang) {
+  const feedLang = (lang === 'ru') ? 'ru' : 'en';
+  const cache = intelCache[feedLang];
+  
+  // Return cache if fresh
+  if (cache.lastUpdate && (Date.now() - cache.lastUpdate < CACHE_DURATION) && cache.items.length > 0) {
+    return {
+      items: cache.items,
+      lastUpdate: cache.lastUpdate,
+      cached: true
+    };
+  }
+  
+  // Fetch fresh data
+  const items = await fetchIntelFeed(feedLang);
+  
+  if (items.length > 0) {
+    intelCache[feedLang] = {
+      items,
+      lastUpdate: Date.now()
+    };
+  }
+  
+  return {
+    items: items.length > 0 ? items : cache.items,
+    lastUpdate: items.length > 0 ? Date.now() : cache.lastUpdate,
+    cached: false
+  };
+}
 
 async function extractText(file) {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -227,6 +355,34 @@ Rules:
     return `Synthesis error: ${error.message}`;
   }
 }
+
+// Intel Feed Endpoint
+app.get('/api/intel-feed', async (req, res) => {
+  const lang = req.query.lang || 'en';
+  
+  try {
+    const feed = await getIntelFeed(lang);
+    res.json(feed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Force refresh intel feed
+app.post('/api/intel-feed/refresh', async (req, res) => {
+  const lang = req.body.lang || 'en';
+  const feedLang = (lang === 'ru') ? 'ru' : 'en';
+  
+  // Clear cache to force refresh
+  intelCache[feedLang] = { items: [], lastUpdate: null };
+  
+  try {
+    const feed = await getIntelFeed(lang);
+    res.json(feed);
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
+});
 
 app.post('/api/ask', async (req, res) => {
   const { question, lang, fileContent, briefMode } = req.body;
@@ -454,6 +610,8 @@ app.get('/health', (req, res) => {
     status: 'ok', 
     fontExists,
     fontPath: FONT_REGULAR,
+    intelCacheEN: intelCache.en.lastUpdate ? new Date(intelCache.en.lastUpdate).toISOString() : null,
+    intelCacheRU: intelCache.ru.lastUpdate ? new Date(intelCache.ru.lastUpdate).toISOString() : null,
     timestamp: new Date().toISOString() 
   });
 });
