@@ -67,6 +67,36 @@
     .agent-error{color:#c0392b}
     .timestamp{text-align:center;color:#444;font-size:0.85rem;margin-top:20px}
     
+    /* Live Intel Feed */
+    .intel-feed{margin-top:30px;padding-top:20px;border-top:1px solid #1B4D3E}
+    .intel-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:16px}
+    .intel-title{display:flex;align-items:center;gap:10px;color:#1B4D3E;font-size:1.1rem;font-weight:bold}
+    .live-dot{width:10px;height:10px;background:#c0392b;border-radius:50%;animation:pulse 2s infinite}
+    @keyframes pulse{0%,100%{opacity:1}50%{opacity:0.4}}
+    .intel-refresh{background:transparent;border:1px solid #333;color:#888;padding:6px 12px;border-radius:4px;cursor:pointer;font-size:0.8rem}
+    .intel-refresh:hover{border-color:#1B4D3E;color:#e0e0e0}
+    .intel-refresh:disabled{opacity:0.5;cursor:not-allowed}
+    .intel-columns{display:grid;grid-template-columns:1fr 1fr;gap:16px}
+    @media(max-width:700px){.intel-columns{grid-template-columns:1fr}}
+    .intel-column{background:#111;border:1px solid #222;border-radius:8px;padding:16px}
+    .intel-column-header{display:flex;align-items:center;gap:8px;margin-bottom:12px;padding-bottom:8px;border-bottom:1px solid #333;font-weight:bold;font-size:0.95rem}
+    .intel-column.en .intel-column-header{color:#1B4D3E}
+    .intel-column.ru .intel-column-header{color:#8B6914}
+    .intel-item{padding:10px 0;border-bottom:1px solid #1a1a1a}
+    .intel-item:last-child{border-bottom:none}
+    .intel-item-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:4px}
+    .intel-item-title{color:#e0e0e0;font-size:0.9rem;font-weight:bold;line-height:1.3;flex:1}
+    .intel-item-badge{font-size:0.65rem;padding:2px 6px;border-radius:3px;margin-left:8px;white-space:nowrap}
+    .intel-item-badge.HIGH{background:#4a1a1a;color:#ff6b6b}
+    .intel-item-badge.MEDIUM{background:#3a3a1a;color:#f0c040}
+    .intel-item-badge.LOW{background:#1a3a1a;color:#60c060}
+    .intel-item-summary{color:#999;font-size:0.8rem;line-height:1.4;margin-top:4px}
+    .intel-item-meta{display:flex;justify-content:space-between;margin-top:6px;font-size:0.7rem;color:#666}
+    .intel-item-category{color:#8B6914}
+    .intel-loading{text-align:center;padding:30px;color:#666;font-style:italic}
+    .intel-error{text-align:center;padding:20px;color:#c0392b;font-size:0.9rem}
+    .intel-update-time{text-align:center;color:#444;font-size:0.75rem;margin-top:12px}
+    
     /* History Panel */
     .history-panel{display:none;position:fixed;top:0;right:0;width:350px;height:100vh;background:#111;border-left:2px solid #1B4D3E;padding:20px;overflow-y:auto;z-index:1000}
     .history-panel.visible{display:block}
@@ -130,6 +160,28 @@
       <div class="agents" id="agents"></div>
       <p class="timestamp" id="timestamp"></p>
     </div>
+    
+    <!-- Live Intelligence Feed -->
+    <div class="intel-feed" id="intelFeed">
+      <div class="intel-header">
+        <div class="intel-title">
+          <span class="live-dot"></span>
+          <span id="intelTitle">LIVE INTELLIGENCE</span>
+        </div>
+        <button class="intel-refresh" id="intelRefresh" onclick="refreshIntel()">↻ Refresh</button>
+      </div>
+      <div class="intel-columns">
+        <div class="intel-column en">
+          <div class="intel-column-header">🇬🇧 GLOBAL</div>
+          <div id="intelEN" class="intel-loading">Loading intelligence...</div>
+        </div>
+        <div class="intel-column ru">
+          <div class="intel-column-header">🇷🇺 РОССИЯ</div>
+          <div id="intelRU" class="intel-loading">Загрузка разведданных...</div>
+        </div>
+      </div>
+      <p class="intel-update-time" id="intelUpdateTime"></p>
+    </div>
   </div>
 
   <!-- History Panel -->
@@ -147,6 +199,7 @@
     let uploadedFileContent='';
     let lastResponse=null;
     let briefMode=false;
+    let intelLoading=false;
     
     const UI={
       en:{
@@ -169,7 +222,11 @@
         exportPdf:'📄 Export PDF',
         clearHistory:'🗑️ Clear All History',
         loadBtn:'Load',
-        deleteBtn:'Delete'
+        deleteBtn:'Delete',
+        intelTitle:'LIVE INTELLIGENCE',
+        intelLoading:'Loading intelligence...',
+        intelError:'Failed to load intelligence feed',
+        intelUpdated:'Last updated'
       },
       ru:{
         placeholder:'Введите вопрос или тему...',
@@ -191,7 +248,11 @@
         exportPdf:'📄 Экспорт PDF',
         clearHistory:'🗑️ Очистить историю',
         loadBtn:'Загрузить',
-        deleteBtn:'Удалить'
+        deleteBtn:'Удалить',
+        intelTitle:'РАЗВЕДКА В РЕАЛЬНОМ ВРЕМЕНИ',
+        intelLoading:'Загрузка разведданных...',
+        intelError:'Ошибка загрузки разведданных',
+        intelUpdated:'Обновлено'
       },
       et:{
         placeholder:'Sisesta küsimus või teema...',
@@ -213,7 +274,11 @@
         exportPdf:'📄 Ekspordi PDF',
         clearHistory:'🗑️ Kustuta ajalugu',
         loadBtn:'Laadi',
-        deleteBtn:'Kustuta'
+        deleteBtn:'Kustuta',
+        intelTitle:'REAALAJAS LUURE',
+        intelLoading:'Laadin luureandmeid...',
+        intelError:'Luureandmete laadimine ebaõnnestus',
+        intelUpdated:'Uuendatud'
       }
     };
     
@@ -245,6 +310,7 @@
       document.getElementById('btnHistory').textContent=t.history;
       document.getElementById('historyTitle').textContent=t.historyTitle;
       document.getElementById('btnClearHistory').textContent=t.clearHistory;
+      document.getElementById('intelTitle').textContent=t.intelTitle;
       const pdfBtn=document.getElementById('pdfBtn');
       if(pdfBtn.style.display!=='none'){
         pdfBtn.textContent=t.exportPdf;
@@ -382,6 +448,93 @@
       }
     }
     
+    // Intel Feed Functions
+    function renderIntelItems(items,container){
+      if(!items||items.length===0){
+        container.innerHTML='<div class="intel-loading">No data available</div>';
+        return;
+      }
+      
+      container.innerHTML=items.map(item=>`
+        <div class="intel-item">
+          <div class="intel-item-header">
+            <span class="intel-item-title">${item.title}</span>
+            <span class="intel-item-badge ${item.importance}">${item.importance}</span>
+          </div>
+          <div class="intel-item-summary">${item.summary}</div>
+          <div class="intel-item-meta">
+            <span class="intel-item-category">${item.category}</span>
+            <span>${item.time||''}</span>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    async function loadIntelFeed(lang){
+      const t=UI[currentLang];
+      const container=document.getElementById(lang==='ru'?'intelRU':'intelEN');
+      
+      try{
+        const response=await fetch(`/api/intel-feed?lang=${lang}`);
+        const data=await response.json();
+        
+        if(data.error){
+          container.innerHTML=`<div class="intel-error">${t.intelError}</div>`;
+          return;
+        }
+        
+        renderIntelItems(data.items,container);
+        
+        if(data.lastUpdate){
+          const updateTime=new Date(data.lastUpdate).toLocaleTimeString();
+          document.getElementById('intelUpdateTime').textContent=`${t.intelUpdated}: ${updateTime}`;
+        }
+      }catch(error){
+        container.innerHTML=`<div class="intel-error">${t.intelError}</div>`;
+      }
+    }
+    
+    async function loadAllIntel(){
+      await Promise.all([
+        loadIntelFeed('en'),
+        loadIntelFeed('ru')
+      ]);
+    }
+    
+    async function refreshIntel(){
+      if(intelLoading)return;
+      intelLoading=true;
+      
+      const btn=document.getElementById('intelRefresh');
+      btn.disabled=true;
+      btn.textContent='↻ Loading...';
+      
+      const t=UI[currentLang];
+      document.getElementById('intelEN').innerHTML=`<div class="intel-loading">${UI.en.intelLoading}</div>`;
+      document.getElementById('intelRU').innerHTML=`<div class="intel-loading">${UI.ru.intelLoading}</div>`;
+      
+      try{
+        await fetch('/api/intel-feed/refresh',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({lang:'en'})
+        });
+        await fetch('/api/intel-feed/refresh',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({lang:'ru'})
+        });
+        
+        await loadAllIntel();
+      }catch(error){
+        console.error('Refresh error:',error);
+      }finally{
+        intelLoading=false;
+        btn.disabled=false;
+        btn.textContent='↻ Refresh';
+      }
+    }
+    
     // History Functions
     function getHistory(){
       const history=localStorage.getItem('lazySusanHistory');
@@ -488,6 +641,12 @@
     
     document.getElementById('question').addEventListener('keydown',(e)=>{
       if(e.key==='Enter'&&e.ctrlKey){ask();}
+    });
+    
+    // Load intel feed on page load
+    document.addEventListener('DOMContentLoaded',()=>{
+      loadAllIntel();
+      setInterval(loadAllIntel,15*60*1000);
     });
   </script>
 </body>
