@@ -23,9 +23,12 @@
     .file-upload.has-file{border-color:#8B6914;background:#1a1a0a}
     .file-upload input{display:none}
     .file-info{color:#8B6914;font-size:0.9rem;margin-top:8px}
-    button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
-    button.submit:hover{background:#2a6b54}
-    button.submit:disabled{background:#333;cursor:not-allowed}
+    .mode-selector{display:flex;gap:10px;margin:12px 0}
+    .mode-btn{flex:1;padding:14px;font-family:Arial,sans-serif;font-size:1rem;font-weight:bold;border:2px solid #333;background:transparent;color:#e0e0e0;border-radius:8px;cursor:pointer;transition:all 0.2s}
+    .mode-btn:hover{border-color:#1B4D3E;background:#111}
+    .mode-btn.active{border-color:#1B4D3E;background:#1B4D3E;color:white}
+    .mode-btn.brief{border-color:#8B6914}
+    .mode-btn.brief.active{background:#8B6914;border-color:#8B6914}
     .action-buttons{display:flex;gap:10px;margin-top:12px}
     .action-buttons button{flex:1;padding:12px;font-family:Arial,sans-serif;font-size:0.95rem;border:none;border-radius:6px;cursor:pointer}
     .btn-pdf{background:#8B6914;color:white}
@@ -37,11 +40,16 @@
     @keyframes spin{to{transform:rotate(360deg)}}
     .results{display:none}
     .synthesis{background:#111;border:2px solid #1B4D3E;border-radius:8px;padding:24px;margin-bottom:20px}
+    .synthesis.brief-mode{border-color:#8B6914}
     .synthesis>h2{color:#1B4D3E;margin-bottom:16px;font-size:1.3rem}
+    .synthesis.brief-mode>h2{color:#8B6914}
     .synthesis-content{line-height:1.8}
     .synthesis-content h2{color:#1B4D3E;font-size:1.3rem;margin:20px 0 12px 0;border-bottom:1px solid #333;padding-bottom:6px}
     .synthesis-content h3{color:#8B6914;font-size:1.15rem;margin:16px 0 10px 0}
     .synthesis-content h4{color:#ccc;font-size:1.05rem;margin:12px 0 8px 0}
+    .brief-content{line-height:2;font-size:1.1rem}
+    .brief-content h2{color:#1B4D3E;font-size:1.4rem;margin:28px 0 16px 0;border-bottom:1px solid #333;padding-bottom:8px}
+    .brief-content h3{color:#8B6914;font-size:1.2rem;margin:20px 0 12px 0}
     .agents-toggle{background:transparent;border:1px solid #333;color:#8B6914;font-size:0.9rem;padding:10px 16px;margin-bottom:16px;cursor:pointer;border-radius:6px}
     .agents-toggle:hover{background:#111}
     .agents{display:none}
@@ -67,7 +75,9 @@
     .history-close:hover{color:#e0e0e0}
     .history-item{background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:10px;cursor:pointer;transition:all 0.2s}
     .history-item:hover{border-color:#1B4D3E;background:#222}
+    .history-item.brief{border-left:3px solid #8B6914}
     .history-item-date{color:#666;font-size:0.75rem;margin-bottom:4px}
+    .history-item-type{color:#8B6914;font-size:0.7rem;text-transform:uppercase;margin-bottom:4px}
     .history-item-question{color:#e0e0e0;font-size:0.9rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
     .history-item-actions{display:flex;gap:8px;margin-top:8px}
     .history-item-actions button{padding:4px 8px;font-size:0.75rem;border:none;border-radius:4px;cursor:pointer}
@@ -90,13 +100,16 @@
       <button class="lang-btn" data-lang="et">🇪🇪 ET</button>
     </div>
     <div class="input-section">
-      <textarea id="question" placeholder="Enter your question..."></textarea>
+      <textarea id="question" placeholder="Enter your question or topic..."></textarea>
       <div class="file-upload" id="fileUpload">
         📎 <span id="filePromptText">Click to upload PDF, DOCX, or TXT file</span>
         <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md">
         <div class="file-info" id="fileInfo"></div>
       </div>
-      <button class="submit" id="submit" onclick="ask()">Ask</button>
+      <div class="mode-selector">
+        <button class="mode-btn active" id="modeAnalysis" onclick="setMode(false)">🔍 Analysis</button>
+        <button class="mode-btn brief" id="modeBrief" onclick="setMode(true)">📊 Strategic Brief</button>
+      </div>
       <div class="action-buttons">
         <button class="btn-history" onclick="toggleHistory()">📜 History</button>
         <button class="btn-pdf" id="pdfBtn" onclick="exportPDF()" style="display:none">📄 Export PDF</button>
@@ -107,7 +120,7 @@
       <p style="margin-top:16px" id="loadingText">Elite agents analyzing...</p>
     </div>
     <div class="results" id="results">
-      <div class="synthesis">
+      <div class="synthesis" id="synthesisBox">
         <h2 id="synthesisTitle">🎼 Conductor's Synthesis</h2>
         <div class="synthesis-content" id="synthesis"></div>
       </div>
@@ -131,11 +144,12 @@
     let currentLang='en';
     let uploadedFileContent='';
     let lastResponse=null;
+    let briefMode=false;
     
     const UI={
-      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Elite agents analyzing...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!'},
-      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!'},
-      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!'}
+      en:{placeholder:'Enter your question or topic...',loading:'Elite agents analyzing...',loadingBrief:'Writing Strategic Brief (this takes longer)...',synthesisTitle:'🎼 Conductor\'s Synthesis',briefTitle:'📊 Strategic Brief',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!',historyBrief:'Strategic Brief'},
+      ru:{placeholder:'Введите вопрос или тему...',loading:'Элитные агенты анализируют...',loadingBrief:'Составляем стратегический обзор (это займёт больше времени)...',synthesisTitle:'🎼 Синтез дирижёра',briefTitle:'📊 Стратегический обзор',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!',historyBrief:'Стратегический обзор'},
+      et:{placeholder:'Sisesta küsimus või teema...',loading:'Eliit-agendid analüüsivad...',loadingBrief:'Kirjutan strateegilist ülevaadet (see võtab kauem)...',synthesisTitle:'🎼 Dirigendi süntees',briefTitle:'📊 Strateegiline ülevaade',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!',historyBrief:'Strateegiline ülevaade'}
     };
     
     const AGENT_MODELS={
@@ -148,12 +162,17 @@
       'Devil\'s Advocate':'KRYONIS-Η'
     };
     
+    function setMode(isBrief){
+      briefMode=isBrief;
+      document.getElementById('modeAnalysis').classList.toggle('active',!isBrief);
+      document.getElementById('modeBrief').classList.toggle('active',isBrief);
+    }
+    
     function updateUI(){
       const t=UI[currentLang];
       document.getElementById('question').placeholder=t.placeholder;
-      document.getElementById('submit').textContent=t.askBtn;
-      document.getElementById('loadingText').textContent=t.loading;
-      document.getElementById('synthesisTitle').textContent=t.synthesisTitle;
+      document.getElementById('loadingText').textContent=briefMode?t.loadingBrief:t.loading;
+      document.getElementById('synthesisTitle').textContent=briefMode?t.briefTitle:t.synthesisTitle;
       document.getElementById('filePromptText').textContent=t.filePrompt;
       const toggle=document.getElementById('agentsToggle');
       toggle.textContent=document.getElementById('agents').classList.contains('visible')?t.hideAgents:t.showAgents;
@@ -214,18 +233,20 @@
     async function ask(){
       const question=document.getElementById('question').value.trim();
       if(!question)return;
-      const submitBtn=document.getElementById('submit');
       const loading=document.getElementById('loading');
       const results=document.getElementById('results');
-      submitBtn.disabled=true;
+      const t=UI[currentLang];
+      
+      document.getElementById('loadingText').textContent=briefMode?t.loadingBrief:t.loading;
       loading.style.display='block';
       results.style.display='none';
       document.getElementById('pdfBtn').style.display='none';
+      
       try{
         const response=await fetch('/api/ask',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({question,lang:currentLang,fileContent:uploadedFileContent})
+          body:JSON.stringify({question,lang:currentLang,fileContent:uploadedFileContent,briefMode})
         });
         const data=await response.json();
         if(data.error){alert('Error: '+data.error);return;}
@@ -237,13 +258,21 @@
       }catch(error){
         alert('Network error: '+error.message);
       }finally{
-        submitBtn.disabled=false;
         loading.style.display='none';
       }
     }
     
     function displayResponse(data){
-      document.getElementById('synthesis').innerHTML=renderMarkdown(data.synthesis);
+      const isBrief=data.briefMode;
+      const t=UI[currentLang];
+      const synthesisBox=document.getElementById('synthesisBox');
+      const synthesisContent=document.getElementById('synthesis');
+      
+      synthesisBox.classList.toggle('brief-mode',isBrief);
+      synthesisContent.className=isBrief?'brief-content':'synthesis-content';
+      document.getElementById('synthesisTitle').textContent=isBrief?t.briefTitle:t.synthesisTitle;
+      
+      synthesisContent.innerHTML=renderMarkdown(data.synthesis);
       document.getElementById('agents').innerHTML=data.agents.map(a=>`
         <div class="agent">
           <div class="agent-header">
@@ -254,7 +283,7 @@
           <div class="agent-response ${a.error?'agent-error':''}">${a.error?'❌ '+a.error:renderMarkdown(a.response)}</div>
         </div>
       `).join('');
-      document.getElementById('timestamp').textContent=UI[currentLang].generated+': '+new Date(data.timestamp).toLocaleString();
+      document.getElementById('timestamp').textContent=t.generated+': '+new Date(data.timestamp).toLocaleString();
       document.getElementById('results').style.display='block';
       document.getElementById('pdfBtn').style.display='block';
       lastResponse=data;
@@ -286,6 +315,7 @@
         timestamp:data.timestamp,
         question:data.question,
         lang:data.lang,
+        briefMode:data.briefMode||false,
         synthesis:data.synthesis,
         agents:data.agents
       };
@@ -297,15 +327,17 @@
     function renderHistory(){
       const history=getHistory();
       const list=document.getElementById('historyList');
+      const t=UI[currentLang];
       
       if(history.length===0){
-        list.innerHTML=`<div class="history-empty">${UI[currentLang].historyEmpty}</div>`;
+        list.innerHTML=`<div class="history-empty">${t.historyEmpty}</div>`;
         return;
       }
       
       list.innerHTML=history.map(item=>`
-        <div class="history-item" data-id="${item.id}">
+        <div class="history-item ${item.briefMode?'brief':''}" data-id="${item.id}">
           <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
+          ${item.briefMode?`<div class="history-item-type">${t.historyBrief}</div>`:''}
           <div class="history-item-question">${item.question}</div>
           <div class="history-item-actions">
             <button class="btn-load" onclick="loadFromHistory(${item.id})">Load</button>
@@ -321,6 +353,7 @@
       if(!item)return;
       
       document.getElementById('question').value=item.question;
+      setMode(item.briefMode||false);
       displayResponse(item);
       toggleHistory();
     }
@@ -362,7 +395,8 @@
         const url=window.URL.createObjectURL(blob);
         const a=document.createElement('a');
         a.href=url;
-        a.download=`KRYONIS_Analysis_${Date.now()}.pdf`;
+        const filename=lastResponse.briefMode?'KRYONIS_Strategic_Brief':'KRYONIS_Analysis';
+        a.download=`${filename}_${Date.now()}.pdf`;
         document.body.appendChild(a);
         a.click();
         document.body.removeChild(a);
@@ -375,6 +409,9 @@
     document.getElementById('question').addEventListener('keydown',(e)=>{
       if(e.key==='Enter'&&e.ctrlKey){ask();}
     });
+    
+    // Make ask() available globally
+    window.ask=ask;
   </script>
 </body>
 </html>
