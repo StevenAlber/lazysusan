@@ -8,7 +8,7 @@
     *{box-sizing:border-box;margin:0;padding:0}
     body{font-family:Georgia,serif;background:#0a0a0a;color:#e0e0e0;min-height:100vh;padding:20px}
     .container{max-width:900px;margin:0 auto}
-    header{text-align:center;margin-bottom:40px;padding:20px 0;border-bottom:1px solid #1B4D3E}
+    header{text-align:center;margin-bottom:30px;padding:20px 0;border-bottom:1px solid #1B4D3E}
     h1{font-size:2.5rem;color:#1B4D3E;margin-bottom:8px}
     .subtitle{color:#8B6914;font-style:italic}
     .lang-selector{display:flex;justify-content:center;gap:10px;margin:20px 0}
@@ -26,11 +26,17 @@
     button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
     button.submit:hover{background:#2a6b54}
     button.submit:disabled{background:#333;cursor:not-allowed}
+    .action-buttons{display:flex;gap:10px;margin-top:12px}
+    .action-buttons button{flex:1;padding:12px;font-family:Arial,sans-serif;font-size:0.95rem;border:none;border-radius:6px;cursor:pointer}
+    .btn-pdf{background:#8B6914;color:white}
+    .btn-pdf:hover{background:#a67b1a}
+    .btn-history{background:#333;color:#e0e0e0;border:1px solid #444}
+    .btn-history:hover{background:#444}
     .loading{text-align:center;padding:40px;color:#8B6914}
     .spinner{display:inline-block;width:40px;height:40px;border:3px solid #333;border-top-color:#1B4D3E;border-radius:50%;animation:spin 1s linear infinite}
     @keyframes spin{to{transform:rotate(360deg)}}
     .results{display:none}
-    .synthesis{background:#111;border:2px solid #1B4D3E;border-radius:8px;padding:24px;margin-bottom:30px}
+    .synthesis{background:#111;border:2px solid #1B4D3E;border-radius:8px;padding:24px;margin-bottom:20px}
     .synthesis>h2{color:#1B4D3E;margin-bottom:16px;font-size:1.3rem}
     .synthesis-content{line-height:1.8}
     .synthesis-content h2{color:#1B4D3E;font-size:1.3rem;margin:20px 0 12px 0;border-bottom:1px solid #333;padding-bottom:6px}
@@ -50,7 +56,26 @@
     .agent-response h3{color:#8B6914;font-size:1.1rem;margin:12px 0 8px 0}
     .agent-response h4{color:#ccc;font-size:1rem;margin:10px 0 6px 0}
     .agent-error{color:#c0392b}
-    .timestamp{text-align:center;color:#444;font-size:0.85rem;margin-top:30px}
+    .timestamp{text-align:center;color:#444;font-size:0.85rem;margin-top:20px}
+    
+    /* History Panel */
+    .history-panel{display:none;position:fixed;top:0;right:0;width:350px;height:100vh;background:#111;border-left:2px solid #1B4D3E;padding:20px;overflow-y:auto;z-index:1000}
+    .history-panel.visible{display:block}
+    .history-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:20px;padding-bottom:10px;border-bottom:1px solid #333}
+    .history-header h3{color:#1B4D3E;font-size:1.2rem}
+    .history-close{background:none;border:none;color:#888;font-size:1.5rem;cursor:pointer}
+    .history-close:hover{color:#e0e0e0}
+    .history-item{background:#1a1a1a;border:1px solid #333;border-radius:6px;padding:12px;margin-bottom:10px;cursor:pointer;transition:all 0.2s}
+    .history-item:hover{border-color:#1B4D3E;background:#222}
+    .history-item-date{color:#666;font-size:0.75rem;margin-bottom:4px}
+    .history-item-question{color:#e0e0e0;font-size:0.9rem;line-height:1.4;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow:hidden}
+    .history-item-actions{display:flex;gap:8px;margin-top:8px}
+    .history-item-actions button{padding:4px 8px;font-size:0.75rem;border:none;border-radius:4px;cursor:pointer}
+    .btn-load{background:#1B4D3E;color:white}
+    .btn-delete{background:#4a1a1a;color:#ff6b6b}
+    .history-empty{color:#666;text-align:center;padding:40px 20px;font-style:italic}
+    .history-clear{width:100%;padding:10px;margin-top:10px;background:#4a1a1a;color:#ff6b6b;border:none;border-radius:6px;cursor:pointer;font-size:0.9rem}
+    .history-clear:hover{background:#5a2a2a}
   </style>
 </head>
 <body>
@@ -66,12 +91,16 @@
     </div>
     <div class="input-section">
       <textarea id="question" placeholder="Enter your question..."></textarea>
-      <div class="file-upload" id="fileUpload" onclick="document.getElementById('fileInput').click()">
-        📎 Click to upload PDF, DOCX, or TXT file
+      <div class="file-upload" id="fileUpload">
+        📎 <span id="filePromptText">Click to upload PDF, DOCX, or TXT file</span>
         <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md">
         <div class="file-info" id="fileInfo"></div>
       </div>
       <button class="submit" id="submit" onclick="ask()">Ask</button>
+      <div class="action-buttons">
+        <button class="btn-history" onclick="toggleHistory()">📜 History</button>
+        <button class="btn-pdf" id="pdfBtn" onclick="exportPDF()" style="display:none">📄 Export PDF</button>
+      </div>
     </div>
     <div class="loading" id="loading" style="display:none">
       <div class="spinner"></div>
@@ -87,14 +116,28 @@
       <p class="timestamp" id="timestamp"></p>
     </div>
   </div>
+
+  <!-- History Panel -->
+  <div class="history-panel" id="historyPanel">
+    <div class="history-header">
+      <h3>📜 History</h3>
+      <button class="history-close" onclick="toggleHistory()">×</button>
+    </div>
+    <div id="historyList"></div>
+    <button class="history-clear" onclick="clearHistory()">🗑️ Clear All History</button>
+  </div>
+
   <script>
     let currentLang='en';
     let uploadedFileContent='';
+    let lastResponse=null;
+    
     const UI={
-      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Elite agents analyzing...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'📎 Click to upload PDF, DOCX, or TXT file'},
-      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'📎 Нажмите для загрузки PDF, DOCX или TXT'},
-      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'📎 Kliki PDF, DOCX või TXT üleslaadimiseks'}
+      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Elite agents analyzing...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!'},
+      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!'},
+      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!'}
     };
+    
     const AGENT_MODELS={
       'Architect':'KRYONIS-Α',
       'Red Team':'KRYONIS-Β',
@@ -104,19 +147,18 @@
       'Futurist':'KRYONIS-Ζ',
       'Devil\'s Advocate':'KRYONIS-Η'
     };
+    
     function updateUI(){
       const t=UI[currentLang];
       document.getElementById('question').placeholder=t.placeholder;
       document.getElementById('submit').textContent=t.askBtn;
       document.getElementById('loadingText').textContent=t.loading;
       document.getElementById('synthesisTitle').textContent=t.synthesisTitle;
+      document.getElementById('filePromptText').textContent=t.filePrompt;
       const toggle=document.getElementById('agentsToggle');
       toggle.textContent=document.getElementById('agents').classList.contains('visible')?t.hideAgents:t.showAgents;
-      if(!uploadedFileContent){
-        document.getElementById('fileUpload').innerHTML='<input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" style="display:none">'+t.filePrompt+'<div class="file-info" id="fileInfo"></div>';
-        document.getElementById('fileInput').addEventListener('change',handleFileUpload);
-      }
     }
+    
     document.querySelectorAll('.lang-btn').forEach(btn=>{
       btn.addEventListener('click',()=>{
         document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));
@@ -125,7 +167,13 @@
         updateUI();
       });
     });
+    
+    document.getElementById('fileUpload').addEventListener('click',()=>{
+      document.getElementById('fileInput').click();
+    });
+    
     document.getElementById('fileInput').addEventListener('change',handleFileUpload);
+    
     async function handleFileUpload(e){
       const file=e.target.files[0];
       if(!file)return;
@@ -148,6 +196,7 @@
         fileInfo.textContent='Error: '+error.message;
       }
     }
+    
     function renderMarkdown(text){
       return text
         .replace(/^####\s+(.+)$/gm,'<h4>$1</h4>')
@@ -157,9 +206,11 @@
         .replace(/\*(.+?)\*/g,'<em>$1</em>')
         .replace(/\n/g,'<br>');
     }
+    
     function getModelDisplay(agentName){
       return AGENT_MODELS[agentName]||'KRYONIS';
     }
+    
     async function ask(){
       const question=document.getElementById('question').value.trim();
       if(!question)return;
@@ -169,6 +220,7 @@
       submitBtn.disabled=true;
       loading.style.display='block';
       results.style.display='none';
+      document.getElementById('pdfBtn').style.display='none';
       try{
         const response=await fetch('/api/ask',{
           method:'POST',
@@ -177,19 +229,11 @@
         });
         const data=await response.json();
         if(data.error){alert('Error: '+data.error);return;}
-        document.getElementById('synthesis').innerHTML=renderMarkdown(data.synthesis);
-        document.getElementById('agents').innerHTML=data.agents.map(a=>`
-          <div class="agent">
-            <div class="agent-header">
-              <span class="agent-name">${a.agent}</span>
-              <span class="agent-model">${getModelDisplay(a.agent)}</span>
-            </div>
-            <div class="agent-role">${a.role||''}</div>
-            <div class="agent-response ${a.error?'agent-error':''}">${a.error?'❌ '+a.error:renderMarkdown(a.response)}</div>
-          </div>
-        `).join('');
-        document.getElementById('timestamp').textContent=UI[currentLang].generated+': '+new Date(data.timestamp).toLocaleString();
-        results.style.display='block';
+        
+        lastResponse=data;
+        saveToHistory(data);
+        displayResponse(data);
+        
       }catch(error){
         alert('Network error: '+error.message);
       }finally{
@@ -197,6 +241,25 @@
         loading.style.display='none';
       }
     }
+    
+    function displayResponse(data){
+      document.getElementById('synthesis').innerHTML=renderMarkdown(data.synthesis);
+      document.getElementById('agents').innerHTML=data.agents.map(a=>`
+        <div class="agent">
+          <div class="agent-header">
+            <span class="agent-name">${a.agent}</span>
+            <span class="agent-model">${getModelDisplay(a.agent)}</span>
+          </div>
+          <div class="agent-role">${a.role||''}</div>
+          <div class="agent-response ${a.error?'agent-error':''}">${a.error?'❌ '+a.error:renderMarkdown(a.response)}</div>
+        </div>
+      `).join('');
+      document.getElementById('timestamp').textContent=UI[currentLang].generated+': '+new Date(data.timestamp).toLocaleString();
+      document.getElementById('results').style.display='block';
+      document.getElementById('pdfBtn').style.display='block';
+      lastResponse=data;
+    }
+    
     function toggleAgents(){
       const agents=document.getElementById('agents');
       const btn=document.getElementById('agentsToggle');
@@ -209,6 +272,106 @@
         btn.textContent=t.hideAgents;
       }
     }
+    
+    // History Functions
+    function getHistory(){
+      const history=localStorage.getItem('lazySusanHistory');
+      return history?JSON.parse(history):[];
+    }
+    
+    function saveToHistory(data){
+      const history=getHistory();
+      const item={
+        id:Date.now(),
+        timestamp:data.timestamp,
+        question:data.question,
+        lang:data.lang,
+        synthesis:data.synthesis,
+        agents:data.agents
+      };
+      history.unshift(item);
+      if(history.length>50)history.pop();
+      localStorage.setItem('lazySusanHistory',JSON.stringify(history));
+    }
+    
+    function renderHistory(){
+      const history=getHistory();
+      const list=document.getElementById('historyList');
+      
+      if(history.length===0){
+        list.innerHTML=`<div class="history-empty">${UI[currentLang].historyEmpty}</div>`;
+        return;
+      }
+      
+      list.innerHTML=history.map(item=>`
+        <div class="history-item" data-id="${item.id}">
+          <div class="history-item-date">${new Date(item.timestamp).toLocaleString()}</div>
+          <div class="history-item-question">${item.question}</div>
+          <div class="history-item-actions">
+            <button class="btn-load" onclick="loadFromHistory(${item.id})">Load</button>
+            <button class="btn-delete" onclick="deleteFromHistory(${item.id})">Delete</button>
+          </div>
+        </div>
+      `).join('');
+    }
+    
+    function loadFromHistory(id){
+      const history=getHistory();
+      const item=history.find(h=>h.id===id);
+      if(!item)return;
+      
+      document.getElementById('question').value=item.question;
+      displayResponse(item);
+      toggleHistory();
+    }
+    
+    function deleteFromHistory(id){
+      let history=getHistory();
+      history=history.filter(h=>h.id!==id);
+      localStorage.setItem('lazySusanHistory',JSON.stringify(history));
+      renderHistory();
+    }
+    
+    function clearHistory(){
+      if(confirm('Delete all history?')){
+        localStorage.removeItem('lazySusanHistory');
+        renderHistory();
+      }
+    }
+    
+    function toggleHistory(){
+      const panel=document.getElementById('historyPanel');
+      panel.classList.toggle('visible');
+      if(panel.classList.contains('visible')){
+        renderHistory();
+      }
+    }
+    
+    // PDF Export
+    async function exportPDF(){
+      if(!lastResponse)return;
+      
+      try{
+        const response=await fetch('/api/export-pdf',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify(lastResponse)
+        });
+        
+        const blob=await response.blob();
+        const url=window.URL.createObjectURL(blob);
+        const a=document.createElement('a');
+        a.href=url;
+        a.download=`KRYONIS_Analysis_${Date.now()}.pdf`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        window.URL.revokeObjectURL(url);
+      }catch(error){
+        alert('PDF export error: '+error.message);
+      }
+    }
+    
     document.getElementById('question').addEventListener('keydown',(e)=>{
       if(e.key==='Enter'&&e.ctrlKey){ask();}
     });
