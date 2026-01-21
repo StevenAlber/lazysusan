@@ -18,6 +18,11 @@
     .input-section{margin-bottom:30px}
     textarea{width:100%;padding:16px;font-family:Georgia,serif;font-size:1.1rem;background:#111;border:2px solid #1B4D3E;color:#e0e0e0;border-radius:8px;resize:vertical;min-height:100px}
     textarea:focus{outline:none;border-color:#8B6914}
+    .file-upload{margin:12px 0;padding:20px;border:2px dashed #333;border-radius:8px;text-align:center;cursor:pointer;transition:all 0.2s}
+    .file-upload:hover{border-color:#1B4D3E;background:#111}
+    .file-upload.has-file{border-color:#8B6914;background:#1a1a0a}
+    .file-upload input{display:none}
+    .file-info{color:#8B6914;font-size:0.9rem;margin-top:8px}
     button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
     button.submit:hover{background:#2a6b54}
     button.submit:disabled{background:#333;cursor:not-allowed}
@@ -61,11 +66,16 @@
     </div>
     <div class="input-section">
       <textarea id="question" placeholder="Enter your question..."></textarea>
+      <div class="file-upload" id="fileUpload" onclick="document.getElementById('fileInput').click()">
+        📎 Click to upload PDF, DOCX, or TXT file
+        <input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md">
+        <div class="file-info" id="fileInfo"></div>
+      </div>
       <button class="submit" id="submit" onclick="ask()">Ask</button>
     </div>
     <div class="loading" id="loading" style="display:none">
       <div class="spinner"></div>
-      <p style="margin-top:16px" id="loadingText">Agents thinking...</p>
+      <p style="margin-top:16px" id="loadingText">Elite agents analyzing...</p>
     </div>
     <div class="results" id="results">
       <div class="synthesis">
@@ -79,15 +89,11 @@
   </div>
   <script>
     let currentLang='en';
+    let uploadedFileContent='';
     const UI={
-      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Elite agents analyzing...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated'},
-      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано'},
-      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud'}
-    };
-    const MODEL_NAMES={
-      'anthropic/claude-opus-4':'KRYONIS-Α',
-      'openai/gpt-4o':'KRYONIS-Β',
-      'perplexity/sonar-pro':'KRYONIS-Δ'
+      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Elite agents analyzing...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'📎 Click to upload PDF, DOCX, or TXT file'},
+      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'📎 Нажмите для загрузки PDF, DOCX или TXT'},
+      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'📎 Kliki PDF, DOCX või TXT üleslaadimiseks'}
     };
     const AGENT_MODELS={
       'Architect':'KRYONIS-Α',
@@ -106,6 +112,10 @@
       document.getElementById('synthesisTitle').textContent=t.synthesisTitle;
       const toggle=document.getElementById('agentsToggle');
       toggle.textContent=document.getElementById('agents').classList.contains('visible')?t.hideAgents:t.showAgents;
+      if(!uploadedFileContent){
+        document.getElementById('fileUpload').innerHTML='<input type="file" id="fileInput" accept=".pdf,.docx,.txt,.md" style="display:none">'+t.filePrompt+'<div class="file-info" id="fileInfo"></div>';
+        document.getElementById('fileInput').addEventListener('change',handleFileUpload);
+      }
     }
     document.querySelectorAll('.lang-btn').forEach(btn=>{
       btn.addEventListener('click',()=>{
@@ -115,6 +125,29 @@
         updateUI();
       });
     });
+    document.getElementById('fileInput').addEventListener('change',handleFileUpload);
+    async function handleFileUpload(e){
+      const file=e.target.files[0];
+      if(!file)return;
+      const fileUpload=document.getElementById('fileUpload');
+      const fileInfo=document.getElementById('fileInfo');
+      fileInfo.textContent='Uploading...';
+      const formData=new FormData();
+      formData.append('file',file);
+      try{
+        const response=await fetch('/api/upload',{method:'POST',body:formData});
+        const data=await response.json();
+        if(data.error){
+          fileInfo.textContent='Error: '+data.error;
+          return;
+        }
+        uploadedFileContent=data.text;
+        fileUpload.classList.add('has-file');
+        fileInfo.textContent='✅ '+data.filename+' ('+Math.round(data.length/1000)+'k chars)';
+      }catch(error){
+        fileInfo.textContent='Error: '+error.message;
+      }
+    }
     function renderMarkdown(text){
       return text
         .replace(/^####\s+(.+)$/gm,'<h4>$1</h4>')
@@ -140,7 +173,7 @@
         const response=await fetch('/api/ask',{
           method:'POST',
           headers:{'Content-Type':'application/json'},
-          body:JSON.stringify({question,lang:currentLang})
+          body:JSON.stringify({question,lang:currentLang,fileContent:uploadedFileContent})
         });
         const data=await response.json();
         if(data.error){alert('Error: '+data.error);return;}
