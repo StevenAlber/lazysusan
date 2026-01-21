@@ -1,0 +1,120 @@
+<!DOCTYPE html>
+<html lang="et">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Lazy Susan</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body { font-family: Georgia, serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; padding: 20px; }
+    .container { max-width: 900px; margin: 0 auto; }
+    header { text-align: center; margin-bottom: 40px; padding: 20px 0; border-bottom: 1px solid #1B4D3E; }
+    h1 { font-size: 2.5rem; color: #1B4D3E; margin-bottom: 8px; }
+    .subtitle { color: #8B6914; font-style: italic; }
+    .input-section { margin-bottom: 30px; }
+    textarea { width: 100%; padding: 16px; font-family: Georgia, serif; font-size: 1.1rem; background: #111; border: 2px solid #1B4D3E; color: #e0e0e0; border-radius: 8px; resize: vertical; min-height: 100px; }
+    textarea:focus { outline: none; border-color: #8B6914; }
+    button { width: 100%; padding: 16px; margin-top: 12px; font-family: Arial, sans-serif; font-size: 1.1rem; font-weight: bold; background: #1B4D3E; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
+    button:hover { background: #2a6b54; }
+    button:disabled { background: #333; cursor: not-allowed; }
+    .loading { text-align: center; padding: 40px; color: #8B6914; }
+    .spinner { display: inline-block; width: 40px; height: 40px; border: 3px solid #333; border-top-color: #1B4D3E; border-radius: 50%; animation: spin 1s linear infinite; }
+    @keyframes spin { to { transform: rotate(360deg); } }
+    .results { display: none; }
+    .synthesis { background: #111; border: 2px solid #1B4D3E; border-radius: 8px; padding: 24px; margin-bottom: 30px; }
+    .synthesis h2 { color: #1B4D3E; margin-bottom: 16px; font-size: 1.3rem; }
+    .synthesis-content { line-height: 1.7; white-space: pre-wrap; }
+    .agents-toggle { background: transparent; border: 1px solid #333; color: #8B6914; font-size: 0.9rem; padding: 10px 16px; margin-bottom: 16px; }
+    .agents-toggle:hover { background: #111; }
+    .agents { display: none; }
+    .agents.visible { display: block; }
+    .agent { background: #0d0d0d; border: 1px solid #222; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
+    .agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
+    .agent-name { color: #1B4D3E; font-weight: bold; }
+    .agent-model { color: #555; font-size: 0.8rem; font-family: monospace; }
+    .agent-role { color: #8B6914; font-style: italic; font-size: 0.9rem; margin-bottom: 12px; }
+    .agent-response { line-height: 1.6; white-space: pre-wrap; }
+    .agent-error { color: #c0392b; }
+    .timestamp { text-align: center; color: #444; font-size: 0.85rem; margin-top: 30px; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1>🎯 Lazy Susan</h1>
+      <p class="subtitle">Multi-model AI orchestrator</p>
+    </header>
+    <div class="input-section">
+      <textarea id="question" placeholder="Sisesta oma küsimus..."></textarea>
+      <button id="submit" onclick="ask()">Küsi</button>
+    </div>
+    <div class="loading" id="loading" style="display: none;">
+      <div class="spinner"></div>
+      <p style="margin-top: 16px;">Agendid mõtlevad...</p>
+    </div>
+    <div class="results" id="results">
+      <div class="synthesis">
+        <h2>🎼 Dirigendi süntees</h2>
+        <div class="synthesis-content" id="synthesis"></div>
+      </div>
+      <button class="agents-toggle" onclick="toggleAgents()">▶ Näita agentide vastuseid</button>
+      <div class="agents" id="agents"></div>
+      <p class="timestamp" id="timestamp"></p>
+    </div>
+  </div>
+  <script>
+    async function ask() {
+      const question = document.getElementById('question').value.trim();
+      if (!question) return;
+      const submitBtn = document.getElementById('submit');
+      const loading = document.getElementById('loading');
+      const results = document.getElementById('results');
+      submitBtn.disabled = true;
+      loading.style.display = 'block';
+      results.style.display = 'none';
+      try {
+        const response = await fetch('/api/ask', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ question })
+        });
+        const data = await response.json();
+        if (data.error) { alert('Viga: ' + data.error); return; }
+        document.getElementById('synthesis').textContent = data.synthesis;
+        const agentsDiv = document.getElementById('agents');
+        agentsDiv.innerHTML = data.agents.map(a => `
+          <div class="agent">
+            <div class="agent-header">
+              <span class="agent-name">${a.agent}</span>
+              <span class="agent-model">${a.model || ''}</span>
+            </div>
+            <div class="agent-role">${a.role || ''}</div>
+            <div class="agent-response ${a.error ? 'agent-error' : ''}">${a.error ? '❌ ' + a.error : a.response}</div>
+          </div>
+        `).join('');
+        document.getElementById('timestamp').textContent = 'Genereeritud: ' + new Date(data.timestamp).toLocaleString('et-EE');
+        results.style.display = 'block';
+      } catch (error) {
+        alert('Võrgu viga: ' + error.message);
+      } finally {
+        submitBtn.disabled = false;
+        loading.style.display = 'none';
+      }
+    }
+    function toggleAgents() {
+      const agents = document.getElementById('agents');
+      const btn = document.querySelector('.agents-toggle');
+      if (agents.classList.contains('visible')) {
+        agents.classList.remove('visible');
+        btn.textContent = '▶ Näita agentide vastuseid';
+      } else {
+        agents.classList.add('visible');
+        btn.textContent = '▼ Peida agentide vastused';
+      }
+    }
+    document.getElementById('question').addEventListener('keydown', (e) => {
+      if (e.key === 'Enter' && e.ctrlKey) { ask(); }
+    });
+  </script>
+</body>
+</html>
