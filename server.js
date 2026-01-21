@@ -5,7 +5,6 @@ const mammoth = require('mammoth');
 const PDFDocument = require('pdfkit');
 const path = require('path');
 const fs = require('fs');
-const https = require('https');
 
 const app = express();
 app.use(express.json({ limit: '10mb' }));
@@ -18,58 +17,9 @@ const upload = multer({
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
-// Font setup
-const FONT_DIR = '/tmp/fonts';
-const FONT_PATH = path.join(FONT_DIR, 'DejaVuSans.ttf');
-const FONT_URL = 'https://raw.githubusercontent.com/ArtifexSoftware/mupdf/master/resources/fonts/dejavu/DejaVuSans.ttf';
-
-let fontReady = false;
-
-async function downloadFont() {
-  return new Promise((resolve, reject) => {
-    if (fs.existsSync(FONT_PATH)) {
-      fontReady = true;
-      console.log('Font already exists');
-      return resolve();
-    }
-
-    if (!fs.existsSync(FONT_DIR)) {
-      fs.mkdirSync(FONT_DIR, { recursive: true });
-    }
-
-    console.log('Downloading font...');
-    const file = fs.createWriteStream(FONT_PATH);
-    
-    https.get(FONT_URL, (response) => {
-      if (response.statusCode === 302 || response.statusCode === 301) {
-        https.get(response.headers.location, (res) => {
-          res.pipe(file);
-          file.on('finish', () => {
-            file.close();
-            fontReady = true;
-            console.log('Font downloaded successfully');
-            resolve();
-          });
-        }).on('error', reject);
-      } else {
-        response.pipe(file);
-        file.on('finish', () => {
-          file.close();
-          fontReady = true;
-          console.log('Font downloaded successfully');
-          resolve();
-        });
-      }
-    }).on('error', (err) => {
-      fs.unlink(FONT_PATH, () => {});
-      console.error('Font download failed:', err.message);
-      resolve(); // Continue without custom font
-    });
-  });
-}
-
-// Download font on startup
-downloadFont();
+// Font paths - using uploaded fonts
+const FONT_REGULAR = path.join(__dirname, 'fonts', 'DejaVuSans.ttf');
+const FONT_BOLD = path.join(__dirname, 'fonts', 'DejaVuSans-Bold.ttf');
 
 const AGENTS = [
   {
@@ -121,14 +71,6 @@ const LANG_INSTRUCTIONS = {
   ru: 'Отвечай только на русском языке. Будь точным, профессиональным и содержательным.',
   et: 'Vasta ainult eesti keeles. Ole täpne, professionaalne ja sisukas.'
 };
-
-function cleanMarkdown(text) {
-  return text
-    .replace(/\*\*/g, '')
-    .replace(/####/g, '')
-    .replace(/###/g, '')
-    .replace(/##/g, '');
-}
 
 async function extractText(file) {
   const ext = path.extname(file.originalname).toLowerCase();
@@ -314,10 +256,19 @@ app.post('/api/export-pdf', async (req, res) => {
       res.send(pdfBuffer);
     });
 
-    // Register custom font if available
-    if (fontReady && fs.existsSync(FONT_PATH)) {
-      doc.registerFont('DejaVu', FONT_PATH);
-      doc.font('DejaVu');
+    // Register custom fonts
+    const fontExists = fs.existsSync(FONT_REGULAR);
+    const fontBoldExists = fs.existsSync(FONT_BOLD);
+    
+    console.log('Font regular exists:', fontExists, FONT_REGULAR);
+    console.log('Font bold exists:', fontBoldExists, FONT_BOLD);
+    
+    if (fontExists) {
+      doc.registerFont('MainFont', FONT_REGULAR);
+      if (fontBoldExists) {
+        doc.registerFont('MainFontBold', FONT_BOLD);
+      }
+      doc.font('MainFont');
     }
 
     const cleanText = (text) => {
@@ -351,19 +302,40 @@ app.post('/api/export-pdf', async (req, res) => {
     };
 
     // Header
+    if (fontBoldExists && fontExists) {
+      doc.font('MainFontBold');
+    }
     doc.fontSize(22).fillColor('#1B4D3E').text(titles.report, { align: 'center' });
     doc.moveDown(0.5);
+    
+    if (fontExists) {
+      doc.font('MainFont');
+    }
     doc.fontSize(10).fillColor('#666').text(new Date(timestamp).toLocaleString(), { align: 'center' });
     doc.moveDown(1);
 
     // Question
-    doc.fontSize(12).fillColor('#8B6914').text(titles.question + ':', { continued: false });
+    if (fontBoldExists && fontExists) {
+      doc.font('MainFontBold');
+    }
+    doc.fontSize(12).fillColor('#8B6914').text(titles.question + ':');
+    
+    if (fontExists) {
+      doc.font('MainFont');
+    }
     doc.fontSize(11).fillColor('#333').text(cleanText(question).substring(0, 500));
     doc.moveDown(1);
 
     // Synthesis
+    if (fontBoldExists && fontExists) {
+      doc.font('MainFontBold');
+    }
     doc.fontSize(14).fillColor('#1B4D3E').text(titles.synthesis, { underline: true });
     doc.moveDown(0.5);
+    
+    if (fontExists) {
+      doc.font('MainFont');
+    }
     doc.fontSize(10).fillColor('#333').text(cleanText(synthesis), {
       align: 'justify',
       lineGap: 2
@@ -372,8 +344,9 @@ app.post('/api/export-pdf', async (req, res) => {
 
     // Agents
     doc.addPage();
-    if (fontReady && fs.existsSync(FONT_PATH)) {
-      doc.font('DejaVu');
+    
+    if (fontBoldExists && fontExists) {
+      doc.font('MainFontBold');
     }
     doc.fontSize(14).fillColor('#1B4D3E').text(titles.agents, { underline: true });
     doc.moveDown(0.5);
@@ -382,7 +355,15 @@ app.post('/api/export-pdf', async (req, res) => {
       if (agent.error) continue;
       
       const code = agentCodes[agent.agent] || agent.agent;
-      doc.fontSize(11).fillColor('#1B4D3E').text(`${agent.agent} (${code})`, { continued: false });
+      
+      if (fontBoldExists && fontExists) {
+        doc.font('MainFontBold');
+      }
+      doc.fontSize(11).fillColor('#1B4D3E').text(`${agent.agent} (${code})`);
+      
+      if (fontExists) {
+        doc.font('MainFont');
+      }
       doc.fontSize(9).fillColor('#8B6914').text(cleanText(agent.role || ''));
       doc.fontSize(9).fillColor('#333').text(cleanText(agent.response).substring(0, 1200), {
         align: 'justify',
@@ -392,9 +373,6 @@ app.post('/api/export-pdf', async (req, res) => {
       
       if (doc.y > 700) {
         doc.addPage();
-        if (fontReady && fs.existsSync(FONT_PATH)) {
-          doc.font('DejaVu');
-        }
       }
     }
 
@@ -409,10 +387,18 @@ app.post('/api/export-pdf', async (req, res) => {
 });
 
 app.get('/health', (req, res) => {
-  res.json({ status: 'ok', fontReady, timestamp: new Date().toISOString() });
+  const fontExists = fs.existsSync(FONT_REGULAR);
+  res.json({ 
+    status: 'ok', 
+    fontExists,
+    fontPath: FONT_REGULAR,
+    timestamp: new Date().toISOString() 
+  });
 });
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`Lazy Susan PRO running on port ${PORT}`);
+  console.log('Font path:', FONT_REGULAR);
+  console.log('Font exists:', fs.existsSync(FONT_REGULAR));
 });
