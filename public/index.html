@@ -1,41 +1,45 @@
 <!DOCTYPE html>
-<html lang="et">
+<html lang="en">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Lazy Susan</title>
   <style>
-    * { box-sizing: border-box; margin: 0; padding: 0; }
-    body { font-family: Georgia, serif; background: #0a0a0a; color: #e0e0e0; min-height: 100vh; padding: 20px; }
-    .container { max-width: 900px; margin: 0 auto; }
-    header { text-align: center; margin-bottom: 40px; padding: 20px 0; border-bottom: 1px solid #1B4D3E; }
-    h1 { font-size: 2.5rem; color: #1B4D3E; margin-bottom: 8px; }
-    .subtitle { color: #8B6914; font-style: italic; }
-    .input-section { margin-bottom: 30px; }
-    textarea { width: 100%; padding: 16px; font-family: Georgia, serif; font-size: 1.1rem; background: #111; border: 2px solid #1B4D3E; color: #e0e0e0; border-radius: 8px; resize: vertical; min-height: 100px; }
-    textarea:focus { outline: none; border-color: #8B6914; }
-    button { width: 100%; padding: 16px; margin-top: 12px; font-family: Arial, sans-serif; font-size: 1.1rem; font-weight: bold; background: #1B4D3E; color: white; border: none; border-radius: 8px; cursor: pointer; transition: background 0.2s; }
-    button:hover { background: #2a6b54; }
-    button:disabled { background: #333; cursor: not-allowed; }
-    .loading { text-align: center; padding: 40px; color: #8B6914; }
-    .spinner { display: inline-block; width: 40px; height: 40px; border: 3px solid #333; border-top-color: #1B4D3E; border-radius: 50%; animation: spin 1s linear infinite; }
-    @keyframes spin { to { transform: rotate(360deg); } }
-    .results { display: none; }
-    .synthesis { background: #111; border: 2px solid #1B4D3E; border-radius: 8px; padding: 24px; margin-bottom: 30px; }
-    .synthesis h2 { color: #1B4D3E; margin-bottom: 16px; font-size: 1.3rem; }
-    .synthesis-content { line-height: 1.7; white-space: pre-wrap; }
-    .agents-toggle { background: transparent; border: 1px solid #333; color: #8B6914; font-size: 0.9rem; padding: 10px 16px; margin-bottom: 16px; }
-    .agents-toggle:hover { background: #111; }
-    .agents { display: none; }
-    .agents.visible { display: block; }
-    .agent { background: #0d0d0d; border: 1px solid #222; border-radius: 8px; padding: 20px; margin-bottom: 16px; }
-    .agent-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 12px; }
-    .agent-name { color: #1B4D3E; font-weight: bold; }
-    .agent-model { color: #555; font-size: 0.8rem; font-family: monospace; }
-    .agent-role { color: #8B6914; font-style: italic; font-size: 0.9rem; margin-bottom: 12px; }
-    .agent-response { line-height: 1.6; white-space: pre-wrap; }
-    .agent-error { color: #c0392b; }
-    .timestamp { text-align: center; color: #444; font-size: 0.85rem; margin-top: 30px; }
+    *{box-sizing:border-box;margin:0;padding:0}
+    body{font-family:Georgia,serif;background:#0a0a0a;color:#e0e0e0;min-height:100vh;padding:20px}
+    .container{max-width:900px;margin:0 auto}
+    header{text-align:center;margin-bottom:40px;padding:20px 0;border-bottom:1px solid #1B4D3E}
+    h1{font-size:2.5rem;color:#1B4D3E;margin-bottom:8px}
+    .subtitle{color:#8B6914;font-style:italic}
+    .lang-selector{display:flex;justify-content:center;gap:10px;margin:20px 0}
+    .lang-btn{padding:8px 16px;border:2px solid #333;background:transparent;color:#e0e0e0;border-radius:6px;cursor:pointer;font-size:1rem}
+    .lang-btn:hover{border-color:#1B4D3E}
+    .lang-btn.active{border-color:#1B4D3E;background:#1B4D3E;color:white}
+    .input-section{margin-bottom:30px}
+    textarea{width:100%;padding:16px;font-family:Georgia,serif;font-size:1.1rem;background:#111;border:2px solid #1B4D3E;color:#e0e0e0;border-radius:8px;resize:vertical;min-height:100px}
+    textarea:focus{outline:none;border-color:#8B6914}
+    button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
+    button.submit:hover{background:#2a6b54}
+    button.submit:disabled{background:#333;cursor:not-allowed}
+    .loading{text-align:center;padding:40px;color:#8B6914}
+    .spinner{display:inline-block;width:40px;height:40px;border:3px solid #333;border-top-color:#1B4D3E;border-radius:50%;animation:spin 1s linear infinite}
+    @keyframes spin{to{transform:rotate(360deg)}}
+    .results{display:none}
+    .synthesis{background:#111;border:2px solid #1B4D3E;border-radius:8px;padding:24px;margin-bottom:30px}
+    .synthesis h2{color:#1B4D3E;margin-bottom:16px;font-size:1.3rem}
+    .synthesis-content{line-height:1.7}
+    .agents-toggle{background:transparent;border:1px solid #333;color:#8B6914;font-size:0.9rem;padding:10px 16px;margin-bottom:16px;cursor:pointer;border-radius:6px}
+    .agents-toggle:hover{background:#111}
+    .agents{display:none}
+    .agents.visible{display:block}
+    .agent{background:#0d0d0d;border:1px solid #222;border-radius:8px;padding:20px;margin-bottom:16px}
+    .agent-header{display:flex;justify-content:space-between;align-items:center;margin-bottom:12px}
+    .agent-name{color:#1B4D3E;font-weight:bold}
+    .agent-model{color:#555;font-size:0.8rem;font-family:monospace}
+    .agent-role{color:#8B6914;font-style:italic;font-size:0.9rem;margin-bottom:12px}
+    .agent-response{line-height:1.6}
+    .agent-error{color:#c0392b}
+    .timestamp{text-align:center;color:#444;font-size:0.85rem;margin-top:30px}
   </style>
 </head>
 <body>
@@ -44,76 +48,107 @@
       <h1>🎯 Lazy Susan</h1>
       <p class="subtitle">Multi-model AI orchestrator</p>
     </header>
-    <div class="input-section">
-      <textarea id="question" placeholder="Sisesta oma küsimus..."></textarea>
-      <button id="submit" onclick="ask()">Küsi</button>
+    <div class="lang-selector">
+      <button class="lang-btn active" data-lang="en">🇬🇧 EN</button>
+      <button class="lang-btn" data-lang="ru">🇷🇺 RU</button>
+      <button class="lang-btn" data-lang="et">🇪🇪 ET</button>
     </div>
-    <div class="loading" id="loading" style="display: none;">
+    <div class="input-section">
+      <textarea id="question" placeholder="Enter your question..."></textarea>
+      <button class="submit" id="submit" onclick="ask()">Ask</button>
+    </div>
+    <div class="loading" id="loading" style="display:none">
       <div class="spinner"></div>
-      <p style="margin-top: 16px;">Agendid mõtlevad...</p>
+      <p style="margin-top:16px" id="loadingText">Agents thinking...</p>
     </div>
     <div class="results" id="results">
       <div class="synthesis">
-        <h2>🎼 Dirigendi süntees</h2>
+        <h2 id="synthesisTitle">🎼 Conductor's Synthesis</h2>
         <div class="synthesis-content" id="synthesis"></div>
       </div>
-      <button class="agents-toggle" onclick="toggleAgents()">▶ Näita agentide vastuseid</button>
+      <button class="agents-toggle" onclick="toggleAgents()" id="agentsToggle">▶ Show agent responses</button>
       <div class="agents" id="agents"></div>
       <p class="timestamp" id="timestamp"></p>
     </div>
   </div>
   <script>
-    async function ask() {
-      const question = document.getElementById('question').value.trim();
-      if (!question) return;
-      const submitBtn = document.getElementById('submit');
-      const loading = document.getElementById('loading');
-      const results = document.getElementById('results');
-      submitBtn.disabled = true;
-      loading.style.display = 'block';
-      results.style.display = 'none';
-      try {
-        const response = await fetch('/api/ask', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ question })
+    let currentLang='en';
+    const UI={
+      en:{placeholder:'Enter your question...',askBtn:'Ask',loading:'Agents thinking...',synthesisTitle:'🎼 Conductor\'s Synthesis',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated'},
+      ru:{placeholder:'Введите ваш вопрос...',askBtn:'Спросить',loading:'Агенты думают...',synthesisTitle:'🎼 Синтез дирижёра',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано'},
+      et:{placeholder:'Sisesta oma küsimus...',askBtn:'Küsi',loading:'Agendid mõtlevad...',synthesisTitle:'🎼 Dirigendi süntees',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud'}
+    };
+    function updateUI(){
+      const t=UI[currentLang];
+      document.getElementById('question').placeholder=t.placeholder;
+      document.getElementById('submit').textContent=t.askBtn;
+      document.getElementById('loadingText').textContent=t.loading;
+      document.getElementById('synthesisTitle').textContent=t.synthesisTitle;
+      const toggle=document.getElementById('agentsToggle');
+      toggle.textContent=document.getElementById('agents').classList.contains('visible')?t.hideAgents:t.showAgents;
+    }
+    document.querySelectorAll('.lang-btn').forEach(btn=>{
+      btn.addEventListener('click',()=>{
+        document.querySelectorAll('.lang-btn').forEach(b=>b.classList.remove('active'));
+        btn.classList.add('active');
+        currentLang=btn.dataset.lang;
+        updateUI();
+      });
+    });
+    function renderMarkdown(text){
+      return text.replace(/\*\*(.+?)\*\*/g,'<strong>$1</strong>').replace(/\*(.+?)\*/g,'<em>$1</em>').replace(/\n/g,'<br>');
+    }
+    async function ask(){
+      const question=document.getElementById('question').value.trim();
+      if(!question)return;
+      const submitBtn=document.getElementById('submit');
+      const loading=document.getElementById('loading');
+      const results=document.getElementById('results');
+      submitBtn.disabled=true;
+      loading.style.display='block';
+      results.style.display='none';
+      try{
+        const response=await fetch('/api/ask',{
+          method:'POST',
+          headers:{'Content-Type':'application/json'},
+          body:JSON.stringify({question,lang:currentLang})
         });
-        const data = await response.json();
-        if (data.error) { alert('Viga: ' + data.error); return; }
-        document.getElementById('synthesis').textContent = data.synthesis;
-        const agentsDiv = document.getElementById('agents');
-        agentsDiv.innerHTML = data.agents.map(a => `
+        const data=await response.json();
+        if(data.error){alert('Error: '+data.error);return;}
+        document.getElementById('synthesis').innerHTML=renderMarkdown(data.synthesis);
+        document.getElementById('agents').innerHTML=data.agents.map(a=>`
           <div class="agent">
             <div class="agent-header">
               <span class="agent-name">${a.agent}</span>
-              <span class="agent-model">${a.model || ''}</span>
+              <span class="agent-model">${a.model||''}</span>
             </div>
-            <div class="agent-role">${a.role || ''}</div>
-            <div class="agent-response ${a.error ? 'agent-error' : ''}">${a.error ? '❌ ' + a.error : a.response}</div>
+            <div class="agent-role">${a.role||''}</div>
+            <div class="agent-response ${a.error?'agent-error':''}">${a.error?'❌ '+a.error:renderMarkdown(a.response)}</div>
           </div>
         `).join('');
-        document.getElementById('timestamp').textContent = 'Genereeritud: ' + new Date(data.timestamp).toLocaleString('et-EE');
-        results.style.display = 'block';
-      } catch (error) {
-        alert('Võrgu viga: ' + error.message);
-      } finally {
-        submitBtn.disabled = false;
-        loading.style.display = 'none';
+        document.getElementById('timestamp').textContent=UI[currentLang].generated+': '+new Date(data.timestamp).toLocaleString();
+        results.style.display='block';
+      }catch(error){
+        alert('Network error: '+error.message);
+      }finally{
+        submitBtn.disabled=false;
+        loading.style.display='none';
       }
     }
-    function toggleAgents() {
-      const agents = document.getElementById('agents');
-      const btn = document.querySelector('.agents-toggle');
-      if (agents.classList.contains('visible')) {
+    function toggleAgents(){
+      const agents=document.getElementById('agents');
+      const btn=document.getElementById('agentsToggle');
+      const t=UI[currentLang];
+      if(agents.classList.contains('visible')){
         agents.classList.remove('visible');
-        btn.textContent = '▶ Näita agentide vastuseid';
-      } else {
+        btn.textContent=t.showAgents;
+      }else{
         agents.classList.add('visible');
-        btn.textContent = '▼ Peida agentide vastused';
+        btn.textContent=t.hideAgents;
       }
     }
-    document.getElementById('question').addEventListener('keydown', (e) => {
-      if (e.key === 'Enter' && e.ctrlKey) { ask(); }
+    document.getElementById('question').addEventListener('keydown',(e)=>{
+      if(e.key==='Enter'&&e.ctrlKey){ask();}
     });
   </script>
 </body>
