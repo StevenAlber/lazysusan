@@ -29,6 +29,9 @@
     .mode-btn.active{border-color:#1B4D3E;background:#1B4D3E;color:white}
     .mode-btn.brief{border-color:#8B6914}
     .mode-btn.brief.active{background:#8B6914;border-color:#8B6914}
+    button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
+    button.submit:hover{background:#2a6b54}
+    button.submit:disabled{background:#333;cursor:not-allowed}
     .action-buttons{display:flex;gap:10px;margin-top:12px}
     .action-buttons button{flex:1;padding:12px;font-family:Arial,sans-serif;font-size:0.95rem;border:none;border-radius:6px;cursor:pointer}
     .btn-pdf{background:#8B6914;color:white}
@@ -110,6 +113,7 @@
         <button class="mode-btn active" id="modeAnalysis" onclick="setMode(false)">🔍 Analysis</button>
         <button class="mode-btn brief" id="modeBrief" onclick="setMode(true)">📊 Strategic Brief</button>
       </div>
+      <button class="submit" id="submit" onclick="ask()">Ask</button>
       <div class="action-buttons">
         <button class="btn-history" onclick="toggleHistory()">📜 History</button>
         <button class="btn-pdf" id="pdfBtn" onclick="exportPDF()" style="display:none">📄 Export PDF</button>
@@ -147,9 +151,9 @@
     let briefMode=false;
     
     const UI={
-      en:{placeholder:'Enter your question or topic...',loading:'Elite agents analyzing...',loadingBrief:'Writing Strategic Brief (this takes longer)...',synthesisTitle:'🎼 Conductor\'s Synthesis',briefTitle:'📊 Strategic Brief',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!',historyBrief:'Strategic Brief'},
-      ru:{placeholder:'Введите вопрос или тему...',loading:'Элитные агенты анализируют...',loadingBrief:'Составляем стратегический обзор (это займёт больше времени)...',synthesisTitle:'🎼 Синтез дирижёра',briefTitle:'📊 Стратегический обзор',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!',historyBrief:'Стратегический обзор'},
-      et:{placeholder:'Sisesta küsimus või teema...',loading:'Eliit-agendid analüüsivad...',loadingBrief:'Kirjutan strateegilist ülevaadet (see võtab kauem)...',synthesisTitle:'🎼 Dirigendi süntees',briefTitle:'📊 Strateegiline ülevaade',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!',historyBrief:'Strateegiline ülevaade'}
+      en:{placeholder:'Enter your question or topic...',askBtn:'Ask',loading:'Elite agents analyzing...',loadingBrief:'Writing Strategic Brief (this takes longer)...',synthesisTitle:'🎼 Conductor\'s Synthesis',briefTitle:'📊 Strategic Brief',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!',historyBrief:'Strategic Brief'},
+      ru:{placeholder:'Введите вопрос или тему...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',loadingBrief:'Составляем стратегический обзор (это займёт больше времени)...',synthesisTitle:'🎼 Синтез дирижёра',briefTitle:'📊 Стратегический обзор',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!',historyBrief:'Стратегический обзор'},
+      et:{placeholder:'Sisesta küsimus või teema...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',loadingBrief:'Kirjutan strateegilist ülevaadet (see võtab kauem)...',synthesisTitle:'🎼 Dirigendi süntees',briefTitle:'📊 Strateegiline ülevaade',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!',historyBrief:'Strateegiline ülevaade'}
     };
     
     const AGENT_MODELS={
@@ -171,6 +175,7 @@
     function updateUI(){
       const t=UI[currentLang];
       document.getElementById('question').placeholder=t.placeholder;
+      document.getElementById('submit').textContent=t.askBtn;
       document.getElementById('loadingText').textContent=briefMode?t.loadingBrief:t.loading;
       document.getElementById('synthesisTitle').textContent=briefMode?t.briefTitle:t.synthesisTitle;
       document.getElementById('filePromptText').textContent=t.filePrompt;
@@ -233,10 +238,12 @@
     async function ask(){
       const question=document.getElementById('question').value.trim();
       if(!question)return;
+      const submitBtn=document.getElementById('submit');
       const loading=document.getElementById('loading');
       const results=document.getElementById('results');
       const t=UI[currentLang];
       
+      submitBtn.disabled=true;
       document.getElementById('loadingText').textContent=briefMode?t.loadingBrief:t.loading;
       loading.style.display='block';
       results.style.display='none';
@@ -258,6 +265,7 @@
       }catch(error){
         alert('Network error: '+error.message);
       }finally{
+        submitBtn.disabled=false;
         loading.style.display='none';
       }
     }
@@ -409,9 +417,6 @@
     document.getElementById('question').addEventListener('keydown',(e)=>{
       if(e.key==='Enter'&&e.ctrlKey){ask();}
     });
-    
-    // Make ask() available globally
-    window.ask=ask;
   </script>
 </body>
 </html>
