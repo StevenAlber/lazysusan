@@ -24,11 +24,9 @@
     .file-upload input{display:none}
     .file-info{color:#8B6914;font-size:0.9rem;margin-top:8px}
     .mode-selector{display:flex;gap:10px;margin:12px 0}
-    .mode-btn{flex:1;padding:14px;font-family:Arial,sans-serif;font-size:1rem;font-weight:bold;border:2px solid #333;background:transparent;color:#e0e0e0;border-radius:8px;cursor:pointer;transition:all 0.2s}
-    .mode-btn:hover{border-color:#1B4D3E;background:#111}
-    .mode-btn.active{border-color:#1B4D3E;background:#1B4D3E;color:white}
-    .mode-btn.brief{border-color:#8B6914}
-    .mode-btn.brief.active{background:#8B6914;border-color:#8B6914}
+    .mode-btn{flex:1;padding:14px;font-family:Arial,sans-serif;font-size:1rem;font-weight:bold;border:2px solid #8B6914;background:transparent;color:#e0e0e0;border-radius:8px;cursor:pointer;transition:all 0.2s}
+    .mode-btn:hover{background:#1a1a0a}
+    .mode-btn.active{background:#8B6914;color:white}
     button.submit{width:100%;padding:16px;margin-top:12px;font-family:Arial,sans-serif;font-size:1.1rem;font-weight:bold;background:#1B4D3E;color:white;border:none;border-radius:8px;cursor:pointer}
     button.submit:hover{background:#2a6b54}
     button.submit:disabled{background:#333;cursor:not-allowed}
@@ -111,11 +109,11 @@
       </div>
       <div class="mode-selector">
         <button class="mode-btn active" id="modeAnalysis" onclick="setMode(false)">🔍 Analysis</button>
-        <button class="mode-btn brief" id="modeBrief" onclick="setMode(true)">📊 Strategic Brief</button>
+        <button class="mode-btn" id="modeBrief" onclick="setMode(true)">📊 Strategic Brief</button>
       </div>
       <button class="submit" id="submit" onclick="ask()">Ask</button>
       <div class="action-buttons">
-        <button class="btn-history" onclick="toggleHistory()">📜 History</button>
+        <button class="btn-history" id="btnHistory" onclick="toggleHistory()">📜 History</button>
         <button class="btn-pdf" id="pdfBtn" onclick="exportPDF()" style="display:none">📄 Export PDF</button>
       </div>
     </div>
@@ -137,11 +135,11 @@
   <!-- History Panel -->
   <div class="history-panel" id="historyPanel">
     <div class="history-header">
-      <h3>📜 History</h3>
+      <h3 id="historyTitle">📜 History</h3>
       <button class="history-close" onclick="toggleHistory()">×</button>
     </div>
     <div id="historyList"></div>
-    <button class="history-clear" onclick="clearHistory()">🗑️ Clear All History</button>
+    <button class="history-clear" id="btnClearHistory" onclick="clearHistory()">🗑️ Clear All History</button>
   </div>
 
   <script>
@@ -151,9 +149,72 @@
     let briefMode=false;
     
     const UI={
-      en:{placeholder:'Enter your question or topic...',askBtn:'Ask',loading:'Elite agents analyzing...',loadingBrief:'Writing Strategic Brief (this takes longer)...',synthesisTitle:'🎼 Conductor\'s Synthesis',briefTitle:'📊 Strategic Brief',showAgents:'▶ Show agent responses',hideAgents:'▼ Hide agent responses',generated:'Generated',filePrompt:'Click to upload PDF, DOCX, or TXT file',historyEmpty:'No history yet. Ask a question to get started!',historyBrief:'Strategic Brief'},
-      ru:{placeholder:'Введите вопрос или тему...',askBtn:'Спросить',loading:'Элитные агенты анализируют...',loadingBrief:'Составляем стратегический обзор (это займёт больше времени)...',synthesisTitle:'🎼 Синтез дирижёра',briefTitle:'📊 Стратегический обзор',showAgents:'▶ Показать ответы агентов',hideAgents:'▼ Скрыть ответы агентов',generated:'Сгенерировано',filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',historyEmpty:'История пуста. Задайте вопрос!',historyBrief:'Стратегический обзор'},
-      et:{placeholder:'Sisesta küsimus või teema...',askBtn:'Küsi',loading:'Eliit-agendid analüüsivad...',loadingBrief:'Kirjutan strateegilist ülevaadet (see võtab kauem)...',synthesisTitle:'🎼 Dirigendi süntees',briefTitle:'📊 Strateegiline ülevaade',showAgents:'▶ Näita agentide vastuseid',hideAgents:'▼ Peida agentide vastused',generated:'Genereeritud',filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',historyEmpty:'Ajalugu on tühi. Küsi midagi!',historyBrief:'Strateegiline ülevaade'}
+      en:{
+        placeholder:'Enter your question or topic...',
+        askBtn:'Ask',
+        loading:'Elite agents analyzing...',
+        loadingBrief:'Writing Strategic Brief (this takes longer)...',
+        synthesisTitle:'🎼 Conductor\'s Synthesis',
+        briefTitle:'📊 Strategic Brief',
+        showAgents:'▶ Show agent responses',
+        hideAgents:'▼ Hide agent responses',
+        generated:'Generated',
+        filePrompt:'Click to upload PDF, DOCX, or TXT file',
+        historyEmpty:'No history yet. Ask a question to get started!',
+        historyBrief:'Strategic Brief',
+        modeAnalysis:'🔍 Analysis',
+        modeBrief:'📊 Strategic Brief',
+        history:'📜 History',
+        historyTitle:'📜 History',
+        exportPdf:'📄 Export PDF',
+        clearHistory:'🗑️ Clear All History',
+        loadBtn:'Load',
+        deleteBtn:'Delete'
+      },
+      ru:{
+        placeholder:'Введите вопрос или тему...',
+        askBtn:'Спросить',
+        loading:'Элитные агенты анализируют...',
+        loadingBrief:'Составляем стратегический обзор (это займёт больше времени)...',
+        synthesisTitle:'🎼 Синтез дирижёра',
+        briefTitle:'📊 Стратегический обзор',
+        showAgents:'▶ Показать ответы агентов',
+        hideAgents:'▼ Скрыть ответы агентов',
+        generated:'Сгенерировано',
+        filePrompt:'Нажмите для загрузки PDF, DOCX или TXT',
+        historyEmpty:'История пуста. Задайте вопрос!',
+        historyBrief:'Стратегический обзор',
+        modeAnalysis:'🔍 Анализ',
+        modeBrief:'📊 Стратегический обзор',
+        history:'📜 История',
+        historyTitle:'📜 История',
+        exportPdf:'📄 Экспорт PDF',
+        clearHistory:'🗑️ Очистить историю',
+        loadBtn:'Загрузить',
+        deleteBtn:'Удалить'
+      },
+      et:{
+        placeholder:'Sisesta küsimus või teema...',
+        askBtn:'Küsi',
+        loading:'Eliit-agendid analüüsivad...',
+        loadingBrief:'Kirjutan strateegilist ülevaadet (see võtab kauem)...',
+        synthesisTitle:'🎼 Dirigendi süntees',
+        briefTitle:'📊 Strateegiline ülevaade',
+        showAgents:'▶ Näita agentide vastuseid',
+        hideAgents:'▼ Peida agentide vastused',
+        generated:'Genereeritud',
+        filePrompt:'Kliki PDF, DOCX või TXT üleslaadimiseks',
+        historyEmpty:'Ajalugu on tühi. Küsi midagi!',
+        historyBrief:'Strateegiline ülevaade',
+        modeAnalysis:'🔍 Analüüs',
+        modeBrief:'📊 Strateegiline ülevaade',
+        history:'📜 Ajalugu',
+        historyTitle:'📜 Ajalugu',
+        exportPdf:'📄 Ekspordi PDF',
+        clearHistory:'🗑️ Kustuta ajalugu',
+        loadBtn:'Laadi',
+        deleteBtn:'Kustuta'
+      }
     };
     
     const AGENT_MODELS={
@@ -179,6 +240,15 @@
       document.getElementById('loadingText').textContent=briefMode?t.loadingBrief:t.loading;
       document.getElementById('synthesisTitle').textContent=briefMode?t.briefTitle:t.synthesisTitle;
       document.getElementById('filePromptText').textContent=t.filePrompt;
+      document.getElementById('modeAnalysis').textContent=t.modeAnalysis;
+      document.getElementById('modeBrief').textContent=t.modeBrief;
+      document.getElementById('btnHistory').textContent=t.history;
+      document.getElementById('historyTitle').textContent=t.historyTitle;
+      document.getElementById('btnClearHistory').textContent=t.clearHistory;
+      const pdfBtn=document.getElementById('pdfBtn');
+      if(pdfBtn.style.display!=='none'){
+        pdfBtn.textContent=t.exportPdf;
+      }
       const toggle=document.getElementById('agentsToggle');
       toggle.textContent=document.getElementById('agents').classList.contains('visible')?t.hideAgents:t.showAgents;
     }
@@ -189,6 +259,7 @@
         btn.classList.add('active');
         currentLang=btn.dataset.lang;
         updateUI();
+        renderHistory();
       });
     });
     
@@ -294,6 +365,7 @@
       document.getElementById('timestamp').textContent=t.generated+': '+new Date(data.timestamp).toLocaleString();
       document.getElementById('results').style.display='block';
       document.getElementById('pdfBtn').style.display='block';
+      document.getElementById('pdfBtn').textContent=t.exportPdf;
       lastResponse=data;
     }
     
@@ -348,8 +420,8 @@
           ${item.briefMode?`<div class="history-item-type">${t.historyBrief}</div>`:''}
           <div class="history-item-question">${item.question}</div>
           <div class="history-item-actions">
-            <button class="btn-load" onclick="loadFromHistory(${item.id})">Load</button>
-            <button class="btn-delete" onclick="deleteFromHistory(${item.id})">Delete</button>
+            <button class="btn-load" onclick="loadFromHistory(${item.id})">${t.loadBtn}</button>
+            <button class="btn-delete" onclick="deleteFromHistory(${item.id})">${t.deleteBtn}</button>
           </div>
         </div>
       `).join('');
