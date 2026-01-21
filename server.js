@@ -12,43 +12,53 @@ const AGENTS = [
   {
     id: 'architect',
     name: 'Architect',
-    role: 'Struktureerib probleemi, näeb süsteemi',
+    role: { en: 'Structures the problem, sees the system', ru: 'Структурирует проблему, видит систему', et: 'Struktureerib probleemi, näeb süsteemi' },
     model: 'anthropic/claude-sonnet-4'
   },
   {
     id: 'redteam', 
     name: 'Red Team',
-    role: 'Otsib nõrkusi, kritiseerib, leiab augud',
+    role: { en: 'Finds weaknesses, criticizes, finds holes', ru: 'Ищет слабости, критикует, находит дыры', et: 'Otsib nõrkusi, kritiseerib, leiab augud' },
     model: 'openai/gpt-4o'
   },
   {
     id: 'synth',
     name: 'Synthesizer', 
-    role: 'Ühendab erinevad vaated, leiab mustrid',
+    role: { en: 'Connects different views, finds patterns', ru: 'Соединяет разные взгляды, находит паттерны', et: 'Ühendab erinevad vaated, leiab mustrid' },
     model: 'google/gemini-2.0-flash-001'
   },
   {
     id: 'facts',
     name: 'Facts',
-    role: 'Kontrollib fakte, otsib allikaid',
+    role: { en: 'Checks facts, searches sources', ru: 'Проверяет факты, ищет источники', et: 'Kontrollib fakte, otsib allikaid' },
     model: 'perplexity/sonar-pro'
   },
   {
     id: 'style',
     name: 'Style',
-    role: 'Viimistleb keele, teeb loetavaks',
+    role: { en: 'Polishes language, makes readable', ru: 'Шлифует язык, делает читаемым', et: 'Viimistleb keele, teeb loetavaks' },
     model: 'anthropic/claude-sonnet-4'
   }
 ];
 
+const LANG_INSTRUCTIONS = {
+  en: 'Respond in English only.',
+  ru: 'Отвечай только на русском языке.',
+  et: 'Vasta ainult eesti keeles.'
+};
+
 // Küsi ühelt agendilt
-async function askAgent(agent, question, context = '') {
-  const systemPrompt = `Sa oled ${agent.name}. Sinu roll: ${agent.role}. 
-Vasta lühidalt ja konkreetselt (max 200 sõna). 
-Keskendu ainult oma rollile - ära ürita kõike katta.`;
+async function askAgent(agent, question, lang = 'en', context = '') {
+  const role = agent.role[lang] || agent.role.en;
+  const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
+  
+  const systemPrompt = `You are ${agent.name}. Your role: ${role}. 
+${langInstruction}
+Respond briefly and concretely (max 200 words). 
+Focus only on your role - don't try to cover everything.`;
 
   const userPrompt = context 
-    ? `Küsimus: ${question}\n\nTeiste agentide vastused:\n${context}`
+    ? `Question: ${question}\n\nOther agents' responses:\n${context}`
     : question;
 
   try {
@@ -79,7 +89,7 @@ Keskendu ainult oma rollile - ära ürita kõike katta.`;
     
     return {
       agent: agent.name,
-      role: agent.role,
+      role: role,
       model: agent.model,
       response: data.choices[0].message.content
     };
@@ -89,21 +99,25 @@ Keskendu ainult oma rollile - ära ürita kõike katta.`;
 }
 
 // Dirigendi süntees
-async function synthesize(question, agentResponses) {
+async function synthesize(question, agentResponses, lang = 'en') {
   const context = agentResponses
     .filter(r => !r.error)
     .map(r => `**${r.agent}** (${r.role}):\n${r.response}`)
     .join('\n\n---\n\n');
 
-  const systemPrompt = `Sa oled Dirigent - Lazy Susan orkestri juht.
-Sinu ülesanne: sünteesi agentide vastused üheks selgeks, toimivaks vastuseks.
+  const langInstruction = LANG_INSTRUCTIONS[lang] || LANG_INSTRUCTIONS.en;
+  
+  const systemPrompt = `You are the Conductor - the leader of the Lazy Susan orchestra.
+Your task: synthesize agents' responses into one clear, actionable answer.
 
-Reeglid:
-1. Ära korda agentide sõnu - loo uus tervik
-2. Märgi kui agendid on eriarvamusel (DISSENT)
-3. Too välja konsensus ja peamised järeldused
-4. Hoia vastus kompaktne (max 300 sõna)
-5. Lisa lõppu "Usaldus: X/10" hinnang`;
+${langInstruction}
+
+Rules:
+1. Don't repeat agents' words - create a new whole
+2. Mark if agents disagree (DISSENT)
+3. Highlight consensus and main conclusions
+4. Keep response compact (max 300 words)
+5. Add "Confidence: X/10" rating at the end`;
 
   try {
     const response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
@@ -118,7 +132,7 @@ Reeglid:
         model: 'anthropic/claude-sonnet-4',
         messages: [
           { role: 'system', content: systemPrompt },
-          { role: 'user', content: `Küsimus: ${question}\n\nAgentide vastused:\n\n${context}` }
+          { role: 'user', content: `Question: ${question}\n\nAgents' responses:\n\n${context}` }
         ],
         max_tokens: 800,
         temperature: 0.5
@@ -128,50 +142,51 @@ Reeglid:
     const data = await response.json();
     return data.choices[0].message.content;
   } catch (error) {
-    return `Sünteesi viga: ${error.message}`;
+    return `Synthesis error: ${error.message}`;
   }
 }
 
 // API endpoint
 app.post('/api/ask', async (req, res) => {
-  const { question } = req.body;
+  const { question, lang = 'en' } = req.body;
   
   if (!question) {
-    return res.status(400).json({ error: 'Küsimus puudub' });
+    return res.status(400).json({ error: 'Question missing' });
   }
 
   if (!OPENROUTER_API_KEY) {
-    return res.status(500).json({ error: 'OPENROUTER_API_KEY puudub' });
+    return res.status(500).json({ error: 'OPENROUTER_API_KEY missing' });
   }
 
-  console.log(`\n📥 Küsimus: ${question}\n`);
+  console.log(`\n📥 Question: ${question} (${lang})\n`);
 
-  // Faas 1: Küsi kõigilt agentidelt paralleelselt
-  console.log('🔄 Küsin agentidelt...');
-  const agentPromises = AGENTS.map(agent => askAgent(agent, question));
+  // Phase 1: Ask all agents in parallel
+  console.log('🔄 Asking agents...');
+  const agentPromises = AGENTS.map(agent => askAgent(agent, question, lang));
   const agentResponses = await Promise.all(agentPromises);
 
-  // Logi vastused
+  // Log responses
   agentResponses.forEach(r => {
     if (r.error) {
       console.log(`❌ ${r.agent}: ${r.error}`);
     } else {
-      console.log(`✅ ${r.agent}: vastus saadud`);
+      console.log(`✅ ${r.agent}: response received`);
     }
   });
 
-  // Faas 2: Dirigendi süntees
-  console.log('🎼 Sünteesib...');
-  const synthesis = await synthesize(question, agentResponses);
+  // Phase 2: Conductor synthesis
+  console.log('🎼 Synthesizing...');
+  const synthesis = await synthesize(question, agentResponses, lang);
 
   const result = {
     question,
+    lang,
     timestamp: new Date().toISOString(),
     agents: agentResponses,
     synthesis
   };
 
-  console.log('✨ Valmis\n');
+  console.log('✨ Done\n');
   res.json(result);
 });
 
@@ -182,5 +197,5 @@ app.get('/health', (req, res) => {
 
 const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
-  console.log(`🎯 Lazy Susan töötab pordil ${PORT}`);
+  console.log(`🎯 Lazy Susan running on port ${PORT}`);
 });
