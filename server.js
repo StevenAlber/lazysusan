@@ -1,9 +1,17 @@
 const express = require('express');
+const multer = require('multer');
+const pdfParse = require('pdf-parse');
+const mammoth = require('mammoth');
 const path = require('path');
 
 const app = express();
-app.use(express.json());
+app.use(express.json({ limit: '10mb' }));
 app.use(express.static('public'));
+
+const upload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
 const OPENROUTER_API_KEY = process.env.OPENROUTER_API_KEY;
 
@@ -57,6 +65,22 @@ const LANG_INSTRUCTIONS = {
   ru: 'Отвечай только на русском языке. Будь точным, профессиональным и содержательным.',
   et: 'Vasta ainult eesti keeles. Ole täpne, professionaalne ja sisukas.'
 };
+
+async function extractText(file) {
+  const ext = path.extname(file.originalname).toLowerCase();
+  
+  if (ext === '.pdf') {
+    const data = await pdfParse(file.buffer);
+    return data.text;
+  } else if (ext === '.docx') {
+    const result = await mammoth.extractRawText({ buffer: file.buffer });
+    return result.value;
+  } else if (ext === '.txt' || ext === '.md') {
+    return file.buffer.toString('utf-8');
+  }
+  
+  throw new Error('Unsupported file type');
+}
 
 async function askAgent(agent, question, lang, context) {
   const role = agent.role[lang] || agent.role.en;
@@ -162,7 +186,7 @@ Rules:
 }
 
 app.post('/api/ask', async (req, res) => {
-  const { question, lang } = req.body;
+  const { question, lang, fileContent } = req.body;
   const useLang = lang || 'en';
 
   if (!question) {
@@ -173,9 +197,13 @@ app.post('/api/ask', async (req, res) => {
     return res.status(500).json({ error: 'OPENROUTER_API_KEY missing' });
   }
 
-  const agentPromises = AGENTS.map(agent => askAgent(agent, question, useLang, ''));
+  const fullQuestion = fileContent 
+    ? `${question}\n\n---\nDOCUMENT CONTENT:\n${fileContent.substring(0, 15000)}`
+    : question;
+
+  const agentPromises = AGENTS.map(agent => askAgent(agent, fullQuestion, useLang, ''));
   const agentResponses = await Promise.all(agentPromises);
-  const synthesis = await synthesize(question, agentResponses, useLang);
+  const synthesis = await synthesize(fullQuestion, agentResponses, useLang);
 
   res.json({
     question,
@@ -184,6 +212,23 @@ app.post('/api/ask', async (req, res) => {
     agents: agentResponses,
     synthesis
   });
+});
+
+app.post('/api/upload', upload.single('file'), async (req, res) => {
+  try {
+    if (!req.file) {
+      return res.status(400).json({ error: 'No file uploaded' });
+    }
+
+    const text = await extractText(req.file);
+    res.json({ 
+      filename: req.file.originalname,
+      text: text.substring(0, 20000),
+      length: text.length
+    });
+  } catch (error) {
+    res.status(500).json({ error: error.message });
+  }
 });
 
 app.get('/health', (req, res) => {
